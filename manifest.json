@@ -1,0 +1,11 @@
+{
+  "name": "CHRONO Calendar",
+  "short_name": "CHRONO",
+  "description": "Time-management calendar by TEMPO - week/day/month/custom views, recurring events, categories.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080c10",
+  "theme_color": "#080c10"
+}
