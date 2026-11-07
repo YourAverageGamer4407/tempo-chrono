@@ -214,6 +214,9 @@ body {
    so the live grid is never mutated mid-drag (kills the screen flash). */
 .drag-ghost { pointer-events: none !important; z-index: 40 !important; opacity: .92; box-shadow: 0 4px 14px rgba(0,0,0,.55); margin: 0; }
 .drag-origin-hidden { visibility: hidden !important; }
+/* LONG-PRESS (touch): subtle glow while the hold charges, stronger once armed */
+.lp-hold { box-shadow: 0 0 0 1px var(--accent), 0 0 10px rgba(0,212,255,.35) !important; transition: box-shadow .55s linear; }
+.lp-armed { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(0,212,255,.6) !important; }
 .now-line::before { content: ''; position: absolute; left: -4px; top: -4px; width: 7px; height: 7px; background: var(--danger); border-radius: 50%; }
 
 /* DAY */
@@ -441,6 +444,14 @@ body {
       <button class="import-btn" onclick="exportData()">&#8679; EXPORT EVENTS (JSON)</button>
       <button class="import-btn" onclick="document.getElementById('importFile').click()">&#8681; IMPORT EVENTS (JSON)</button>
       <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importDataFile(this)">
+    </div>
+    <div class="cal-list-section">
+      <div class="cal-list-header"><span>CLOUD SYNC</span><span id="syncDot" style="font-size:8px;color:var(--text3)">OFF</span></div>
+      <div style="padding:0 4px 6px;font-size:9px;color:var(--text3);font-family:var(--mono);line-height:1.5">Sync events between phone &amp; PC via your private GitHub repo.</div>
+      <div style="padding:0 4px 6px"><input type="password" id="syncToken" placeholder="GitHub PAT token" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:3px;font-size:10px;color:var(--text);background:var(--bg);outline:none;font-family:var(--mono)"></div>
+      <button class="add-cal-btn" id="syncBtn" onclick="syncConnect()">CONNECT SYNC</button>
+      <button class="import-btn" id="syncNowBtn" onclick="syncNow()" style="display:none">&#8635; SYNC NOW</button>
+      <div id="syncStatus" style="padding:4px;font-size:9px;color:var(--text2);font-family:var(--mono);min-height:14px"></div>
     </div>
     <div class="legend">
       <div class="legend-title">// CATEGORIES</div>
@@ -739,6 +750,7 @@ function saveAll() {
   localStorage.setItem('chrono_v2_exceptions', JSON.stringify(exceptions));
   localStorage.setItem('chrono_v2_calendars', JSON.stringify(calendars));
   if (typeof HOUR_ZOOM_MODE !== 'undefined' && HOUR_ZOOM_MODE === 'auto') refreshZoom();
+  scheduleSyncPush();
 }
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function dateStr(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -1350,6 +1362,7 @@ function confirmRecurAction(){
 // events prompt "this occurrence vs whole series" via the shared recurDialog.
 let dragSt=null;
 const SNAP_MIN=5;
+const DRAG_HOLD_MS=550; // touch: hold this long before a block becomes draggable
 function t2m(t){const[a,b]=t.split(':').map(Number);return a*60+b;}
 function m2t(m){const h=String(Math.floor(m/60)).padStart(2,'0'),mm=String(m%60).padStart(2,'0');return h+':'+mm;}
 document.addEventListener('pointerdown',e=>{
@@ -1375,16 +1388,35 @@ document.addEventListener('pointerdown',e=>{
   const isMorningSeg = isOvernight && occDs>anchorDs;
   // The on-screen start minute of THIS block:
   const segStartM = isMorningSeg ? 0 : startM;
+  // LONG-PRESS GATE (touch only): a quick tap still opens the detail popup.
+  // The drag only arms after the finger has held still for DRAG_HOLD_MS;
+  // a small hold indicator shows on the block while it charges.
   dragSt={
     ev, el, occ:occDs,
     colRect: col.getBoundingClientRect(),
     grabMin: Math.round((e.clientY-col.getBoundingClientRect().top)/HOUR_PX*60/SNAP_MIN)*SNAP_MIN,
     startM, endM, dur, isOvernight, isMorningSeg, segStartM,
-    moved:false
+    moved:false,
+    isTouch: e.pointerType==='touch',
+    armed: e.pointerType!=='touch', // mouse/pen arm instantly, touch must hold
+    startX: e.clientX, startY: e.clientY,
+    holdT: null
   };
+  if(dragSt.isTouch){
+    el.classList.add('lp-hold');
+    dragSt.holdT=setTimeout(()=>{ if(dragSt){ dragSt.armed=true; el.classList.remove('lp-hold'); el.classList.add('lp-armed'); } }, DRAG_HOLD_MS);
+  }
 });
 document.addEventListener('pointermove',e=>{
   if(!dragSt) return;
+  if(!dragSt.armed){
+    // Touch still in the hold window: if the finger moved off the block, it's a
+    // scroll — cancel the pending drag so the page can scroll normally.
+    if(Math.abs(e.clientY-dragSt.startY)>10 || Math.abs(e.clientX-dragSt.startX)>10){
+      clearTimeout(dragSt.holdT); dragSt.el.classList.remove('lp-hold'); dragSt=null;
+    }
+    return;
+  }
   const y=e.clientY-dragSt.colRect.top;
   let under=Math.round(y/HOUR_PX*60/SNAP_MIN)*SNAP_MIN; // snapped minute under cursor
   // Move THIS block; its on-screen length is what clamps the drag.
@@ -1424,6 +1456,8 @@ let suppressNextClick=false;
 document.addEventListener('pointerup',()=>{
   if(!dragSt) return;
   const st=dragSt; dragSt=null;
+  clearTimeout(st.holdT);
+  st.el.classList.remove('lp-hold','lp-armed');
   if(!st.moved) return; // was a plain click — let onclick handle detail popup
   // Clean up ghost + restore original before committing.
   if(st.ghost) st.ghost.remove();
@@ -1436,6 +1470,8 @@ document.addEventListener('pointerup',()=>{
 // never leave a ghost or a hidden block stranded.
 document.addEventListener('pointercancel',()=>{
   if(!dragSt) return;
+  clearTimeout(dragSt.holdT);
+  dragSt.el.classList.remove('lp-hold','lp-armed');
   if(dragSt.ghost) dragSt.ghost.remove();
   dragSt.el.classList.remove('drag-origin-hidden');
   dragSt=null;
@@ -1839,6 +1875,116 @@ function importDataFile(input){
   if (touched || events.length !== before) saveAll();
   localStorage.setItem('chrono_v2_cleared72', 'done');
 })();
+
+// ================= GITHUB SYNC =================
+// Same architecture as ATLAS finance sync: private repo tempo-calendar-sync,
+// file sync_data.json, debounced push, poll every 30s, localStorage as offline cache.
+const SYNC_OWNER = 'YourAverageGamer4407';
+const SYNC_REPO  = 'tempo-calendar-sync';
+const SYNC_FILE  = 'sync_data.json';
+const SYNC_API   = 'https://api.github.com';
+let syncSha = null, syncPushTimer = null, syncPollTimer = null, syncApplying = false;
+
+function syncTokenGet(){ return localStorage.getItem('chrono_gh_token') || ''; }
+function syncTokenSet(t){ localStorage.setItem('chrono_gh_token', t); }
+function syncHdr(){ return { 'Authorization':'Bearer '+syncTokenGet(), 'Accept':'application/vnd.github+json' }; }
+function syncStatusSet(msg, ok){
+  const el = document.getElementById('syncStatus');
+  if (el){ el.textContent = msg; el.style.color = ok === false ? 'var(--danger)' : 'var(--text2)'; }
+  const dot = document.getElementById('syncDot');
+  if (dot){ const on = !!syncTokenGet(); dot.textContent = on ? 'ON' : 'OFF'; dot.style.color = on ? 'var(--ok)' : 'var(--text3)'; }
+}
+function syncPayload(){
+  return { updated: new Date().toISOString(),
+    events: JSON.parse(localStorage.getItem('chrono_v2_events') || '[]'),
+    exceptions: JSON.parse(localStorage.getItem('chrono_v2_exceptions') || '{}'),
+    calendars: JSON.parse(localStorage.getItem('chrono_v2_calendars') || 'null') };
+}
+async function syncPull(){
+  if (!syncTokenGet()) return false;
+  const r = await fetch(`${SYNC_API}/repos/${SYNC_OWNER}/${SYNC_REPO}/contents/${SYNC_FILE}`, { headers: syncHdr() });
+  if (r.status === 404) { syncSha = null; return 'empty'; }
+  if (!r.ok) throw new Error('pull '+r.status);
+  const j = await r.json();
+  syncSha = j.sha;
+  const data = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
+  // Never wipe real local data with an empty remote.
+  const localCount = JSON.parse(localStorage.getItem('chrono_v2_events')||'[]').length;
+  if ((!data.events || data.events.length === 0) && localCount > 0) { syncStatusSet('REMOTE EMPTY — kept local'); return 'empty'; }
+  if (Array.isArray(data.events)) {
+    syncApplying = true;
+    try {
+      localStorage.setItem('chrono_v2_events', JSON.stringify(data.events));
+      localStorage.setItem('chrono_v2_exceptions', JSON.stringify(data.exceptions||{}));
+      if (data.calendars) localStorage.setItem('chrono_v2_calendars', JSON.stringify(data.calendars));
+      events     = data.events;
+      exceptions = data.exceptions || {};
+      if (data.calendars) calendars = data.calendars;
+      renderCalList(); render();
+    } finally { syncApplying = false; }
+  }
+  syncStatusSet('SYNCED ' + new Date().toLocaleTimeString());
+  return true;
+}
+async function syncPush(){
+  if (!syncTokenGet()) return;
+  const payload = syncPayload();
+  const body = { message: 'chrono sync ' + payload.updated,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify(payload)))) };
+  if (syncSha) body.sha = syncSha;
+  let r = await fetch(`${SYNC_API}/repos/${SYNC_OWNER}/${SYNC_REPO}/contents/${SYNC_FILE}`,
+    { method:'PUT', headers: syncHdr(), body: JSON.stringify(body) });
+  if (r.status === 409 || r.status === 422) { await syncPull(); body.sha = syncSha; if (!syncSha) delete body.sha;
+    r = await fetch(`${SYNC_API}/repos/${SYNC_OWNER}/${SYNC_REPO}/contents/${SYNC_FILE}`,
+      { method:'PUT', headers: syncHdr(), body: JSON.stringify(body) }); }
+  if (!r.ok) throw new Error('push '+r.status);
+  const j = await r.json();
+  syncSha = j.content.sha;
+  syncStatusSet('SYNCED ' + new Date().toLocaleTimeString());
+}
+function scheduleSyncPush(){
+  if (syncApplying || !syncTokenGet()) return;
+  clearTimeout(syncPushTimer);
+  syncPushTimer = setTimeout(()=>{ syncPush().catch(e=>syncStatusSet('PUSH FAIL '+e.message,false)); }, 800);
+}
+async function syncNow(){
+  try { await syncPush(); await syncPull(); } catch(e){ syncStatusSet('SYNC FAIL '+e.message, false); }
+}
+async function syncConnect(){
+  const inp = document.getElementById('syncToken');
+  const tok = (inp && inp.value.trim()) || syncTokenGet();
+  if (!tok) { syncStatusSet('PASTE TOKEN FIRST', false); return; }
+  syncTokenSet(tok);
+  syncStatusSet('CONNECTING...');
+  try {
+    // Ensure private sync repo exists.
+    const chk = await fetch(`${SYNC_API}/repos/${SYNC_OWNER}/${SYNC_REPO}`, { headers: syncHdr() });
+    if (chk.status === 404) {
+      const cr = await fetch(`${SYNC_API}/user/repos`, { method:'POST', headers: syncHdr(),
+        body: JSON.stringify({ name: SYNC_REPO, private: true, auto_init: true }) });
+      if (!cr.ok) throw new Error('repo create '+cr.status);
+    } else if (!chk.ok) throw new Error('repo check '+chk.status);
+    const pulled = await syncPull();
+    if (pulled === 'empty') await syncPush(); // first device seeds the remote
+    document.getElementById('syncNowBtn').style.display = 'block';
+    if (inp) inp.value = '';
+    clearInterval(syncPollTimer);
+    syncPollTimer = setInterval(()=>{ if(!document.hidden) syncPull().catch(e=>syncStatusSet('POLL FAIL '+e.message,false)); }, 30000);
+    syncStatusSet('SYNCED ' + new Date().toLocaleTimeString());
+  } catch(e){ syncStatusSet('FAIL '+e.message, false); }
+}
+// Pull the moment the user returns to the tab/app instead of waiting up to 30s.
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && syncTokenGet()) syncPull().catch(()=>{}); });
+window.addEventListener('focus',()=>{ if(syncTokenGet()) syncPull().catch(()=>{}); });
+// Auto-resume on load if a token was saved on this device.
+(function syncBoot(){
+  const inp = document.getElementById('syncToken');
+  if (syncTokenGet()) {
+    syncConnect();
+  }
+  syncStatusSet('');
+})();
+// ================= END GITHUB SYNC =================
 
 renderCalList();
 render();
