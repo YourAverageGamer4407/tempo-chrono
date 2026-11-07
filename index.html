@@ -1925,6 +1925,19 @@ function syncPayload(){
     exceptions: JSON.parse(localStorage.getItem('chrono_v2_exceptions') || '{}'),
     calendars: JSON.parse(localStorage.getItem('chrono_v2_calendars') || 'null') };
 }
+function syncApplyRemote(data){
+  syncApplying = true;
+  try {
+    localStorage.setItem('chrono_v2_events', JSON.stringify(data.events));
+    localStorage.setItem('chrono_v2_exceptions', JSON.stringify(data.exceptions||{}));
+    if (data.calendars) localStorage.setItem('chrono_v2_calendars', JSON.stringify(data.calendars));
+    events     = data.events;
+    exceptions = data.exceptions || {};
+    if (data.calendars) calendars = data.calendars;
+    localStorage.setItem('chrono_last_remote_updated', data.updated || '');
+    renderCalList(); render();
+  } finally { syncApplying = false; }
+}
 async function syncPull(){
   if (!syncTokenGet()) return false;
   const r = await fetch(`${SYNC_API}/repos/${SYNC_OWNER}/${SYNC_REPO}/contents/${SYNC_FILE}`, { headers: syncHdr() });
@@ -1933,20 +1946,35 @@ async function syncPull(){
   const j = await r.json();
   syncSha = j.sha;
   const data = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
+  // No-change fast path: same remote snapshot we last applied — never touch local.
+  if (data.updated && data.updated === localStorage.getItem('chrono_last_remote_updated')) return true;
   // Never wipe real local data with an empty remote.
-  const localCount = JSON.parse(localStorage.getItem('chrono_v2_events')||'[]').length;
-  if ((!data.events || data.events.length === 0) && localCount > 0) { syncStatusSet('REMOTE EMPTY — kept local'); return 'empty'; }
+  const localEvents = JSON.parse(localStorage.getItem('chrono_v2_events')||'[]');
+  if ((!data.events || data.events.length === 0) && localEvents.length > 0) { syncStatusSet('REMOTE EMPTY — kept local'); return 'empty'; }
   if (Array.isArray(data.events)) {
-    syncApplying = true;
-    try {
-      localStorage.setItem('chrono_v2_events', JSON.stringify(data.events));
-      localStorage.setItem('chrono_v2_exceptions', JSON.stringify(data.exceptions||{}));
-      if (data.calendars) localStorage.setItem('chrono_v2_calendars', JSON.stringify(data.calendars));
-      events     = data.events;
-      exceptions = data.exceptions || {};
-      if (data.calendars) calendars = data.calendars;
-      renderCalList(); render();
-    } finally { syncApplying = false; }
+    // DELETION GUARD: if applying remote would remove events that only exist locally, ask first.
+    const remoteIds = new Set(data.events.map(e => e.id));
+    const localOnly = localEvents.filter(e => !remoteIds.has(e.id));
+    if (localOnly.length > 0) {
+      const keepLocal = window.confirm(
+        'SYNC WARNING: the other device\'s version is missing ' + localOnly.length +
+        ' event(s) that exist HERE (e.g. "' + (localOnly[0].title||'Untitled') + '").\n\n' +
+        'OK = KEEP local events and push them up to the other device.\n' +
+        'CANCEL = DISCARD the local-only events and take the other device\'s version.');
+      if (keepLocal) {
+        // Merge: local-only events survive, then push the merged set up.
+        data.events = data.events.concat(localOnly);
+        syncApplyRemote(data);
+        await syncPush();
+        syncStatusSet('MERGED — kept ' + localOnly.length + ' local event(s), pushed up');
+        return true;
+      }
+      // Commander chose to discard local-only events: apply remote as-is.
+      syncApplyRemote(data);
+      syncStatusSet('SYNCED — discarded ' + localOnly.length + ' local event(s)');
+      return true;
+    }
+    syncApplyRemote(data);
   }
   syncStatusSet('SYNCED ' + new Date().toLocaleTimeString());
   return true;
