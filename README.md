@@ -1,11 +1,10 @@
 # CHRONO Calendar
 
-Time-management calendar app (TEMPO / StarNet).
+## Download / Install on your phone
 
-- Week / Day / Month / Custom / Stats views
-- Recurring events, categories, undo/redo, overnight sleep blocks
-- Data stored locally in the browser (localStorage)
+**[>> OPEN THE LIVE APP HERE <<](https://youraveragegamer4407.github.io/tempo-chrono/)**
 
-**Live app (GitHub Pages):** https://youraveragegamer4407.github.io/tempo-chrono/
+Tap that link on your phone, then in Chrome: menu (3 dots) > **Add to Home screen** > **Install**.
+You get an app icon, full-screen, works offline.
 
-Installable on Android: open the link in Chrome, menu > Add to Home screen.
+Live app: https://youraveragegamer4407.github.io/tempo-chrono/
