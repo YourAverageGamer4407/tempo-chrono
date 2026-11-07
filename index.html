@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>CHRONO // CALENDAR</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -24,10 +24,12 @@
   --mono:     'JetBrains Mono', 'Courier New', monospace;
 }
 
+html { height: 100%; }
 body {
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg); color: var(--text);
-  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+  overscroll-behavior: none; touch-action: manipulation;
 }
 
 /* TOPBAR */
@@ -45,6 +47,10 @@ body {
 }
 .today-btn:hover { border-color: var(--accent); color: var(--accent); }
 .nav-btns { display: flex; gap: 2px; }
+.menu-btn {
+  display: none; width: 30px; height: 30px; border: 1px solid var(--border2); background: none; cursor: pointer;
+  border-radius: 3px; font-size: 15px; color: var(--text2); align-items: center; justify-content: center;
+}
 .nav-btn {
   width: 30px; height: 30px; border: none; background: none; cursor: pointer;
   border-radius: 3px; font-size: 16px; color: var(--text2);
@@ -81,6 +87,35 @@ body {
 }
 .new-event-btn:hover { background: rgba(0,212,255,.15); border-color: var(--accent); }
 .new-event-btn .plus { font-size: 15px; line-height: 1; }
+
+.topbar-create {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 16px 6px 10px; border: 1px solid rgba(0,212,255,.35); border-radius: 16px;
+  cursor: pointer; font-size: 11px; font-family: var(--mono); letter-spacing: 1px;
+  background: rgba(0,212,255,.08); color: var(--accent); transition: all .15s;
+}
+.topbar-create:hover { background: rgba(0,212,255,.16); border-color: var(--accent); }
+.topbar-create .plus-circle {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--bg);
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; line-height: 1;
+}
+
+.cal-list-section { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
+.cal-list-header { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; padding: 0 4px 8px; display: flex; justify-content: space-between; align-items: center; }
+.cal-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 3px; cursor: pointer; transition: background .12s; }
+.cal-row:hover { background: var(--surface2); }
+.cal-row:hover .cal-del { display: inline-flex; }
+.cal-swatch { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; cursor: pointer; }
+.cal-name { font-size: 11px; color: var(--text2); font-family: var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-row.off .cal-name { color: var(--text3); text-decoration: line-through; opacity: .5; }
+.cal-row.off .cal-swatch { opacity: .25; }
+.cal-del { display: none; background: none; border: none; color: var(--text3); font-size: 11px; cursor: pointer; padding: 2px 4px; }
+.cal-del:hover { color: var(--danger); }
+.add-cal-btn, .import-btn {
+  width: 100%; margin-top: 6px; padding: 6px 8px; background: transparent; border: 1px dashed var(--border2);
+  border-radius: 3px; color: var(--text2); font-size: 10px; font-family: var(--mono); letter-spacing: .5px; cursor: pointer; transition: all .12s; text-align: left;
+}
+.add-cal-btn:hover, .import-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 .mini-header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; margin-bottom: 6px; }
 .mini-month { font-family: var(--mono); font-size: 10px; color: var(--text2); letter-spacing: 1px; }
@@ -145,7 +180,40 @@ body {
 .week-event.ev-orange { background: #f5b07a; color: #080c10; }
 .week-event.ev-lime   { background: #d8f07a; color: #080c10; }
 .week-event.ev-pink   { background: #f7c8e0; color: #080c10; }
+/* ALL-DAY STRIP (Google Calendar style) */
+.allday-row { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); min-height: 22px; max-height: 120px; overflow-y: auto; }
+.allday-label { width: 56px; flex-shrink: 0; display: flex; align-items: flex-start; justify-content: flex-end; padding: 4px 8px 0 0; font-size: 8px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; }
+.allday-track { flex: 1; position: relative; min-height: 20px; border-left: 1px solid var(--border); cursor: cell; }
+.allday-track:hover { background: rgba(125,216,240,.04); }
+.allday-cell { padding: 2px 3px; min-height: 20px; display: flex; flex-direction: column; gap: 1px; }
+.allday-span { position: absolute; height: 18px; line-height: 18px; background: #7dd8f0; color: #080c10; border-radius: 3px; padding: 0 6px; font-size: 10px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-weight: 600; transition: opacity .1s; border: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 2px rgba(0,0,0,.4); z-index: 2; }
+.allday-span:hover { opacity: .85; }
+.allday-span.span-start { border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
+.allday-span:not(.span-start) { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; }
+.allday-span:not(.span-end) { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; }
+.allday-span.ev-green  { background: #7dddb0; color: #080c10; }
+.allday-span.ev-red    { background: #f28b9a; color: #fff; }
+.allday-span.ev-yellow { background: #f5d57a; color: #080c10; }
+.allday-span.ev-purple { background: #c4b0f7; color: #080c10; }
+.allday-span.ev-teal   { background: #a8b8e8; color: #080c10; }
+.allday-span.ev-orange { background: #f5b07a; color: #080c10; }
+.allday-span.ev-lime   { background: #d8f07a; color: #080c10; }
+.allday-span.ev-pink   { background: #f7c8e0; color: #080c10; }
+.allday-event { background: #7dd8f0; color: #080c10; border-radius: 3px; padding: 2px 6px; font-size: 10px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-weight: 600; transition: opacity .1s; border: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.allday-event:hover { opacity: .85; }
+.allday-event.ev-green  { background: #7dddb0; color: #080c10; }
+.allday-event.ev-red    { background: #f28b9a; color: #fff; }
+.allday-event.ev-yellow { background: #f5d57a; color: #080c10; }
+.allday-event.ev-purple { background: #c4b0f7; color: #080c10; }
+.allday-event.ev-teal   { background: #a8b8e8; color: #080c10; }
+.allday-event.ev-orange { background: #f5b07a; color: #080c10; }
+.allday-event.ev-lime   { background: #d8f07a; color: #080c10; }
+.allday-event.ev-pink   { background: #f7c8e0; color: #080c10; }
 .now-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--danger); z-index: 2; opacity: .8; }
+/* DRAG GHOST — the clone that follows the cursor; original block hides while dragging
+   so the live grid is never mutated mid-drag (kills the screen flash). */
+.drag-ghost { pointer-events: none !important; z-index: 40 !important; opacity: .92; box-shadow: 0 4px 14px rgba(0,0,0,.55); margin: 0; }
+.drag-origin-hidden { visibility: hidden !important; }
 .now-line::before { content: ''; position: absolute; left: -4px; top: -4px; width: 7px; height: 7px; background: var(--danger); border-radius: 50%; }
 
 /* DAY */
@@ -158,6 +226,8 @@ body {
 .day-col { border-left: 1px solid var(--border); position: relative; cursor: pointer; }
 .day-event { position: absolute; left: 4px; right: 4px; border-left: none; background: #7dd8f0; color: #080c10; border-radius: 3px; padding: 4px 8px; font-size: 11px; cursor: pointer; overflow: hidden; z-index: 1; font-family: var(--mono); font-weight: 600; transition: opacity .1s; }
 .day-event { border: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.week-event[data-drag-id], .day-event[data-drag-id] { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+.week-event[data-drag-id]:active, .day-event[data-drag-id]:active { cursor: grabbing; opacity: .9; z-index: 5; }
 .day-event:hover { opacity: .85; }
 .day-event.ev-green  { background: #7dddb0; color: #080c10; }
 .day-event.ev-red    { background: #f28b9a; color: #fff; }
@@ -250,7 +320,13 @@ body {
 .detail-color-bar { width: 3px; height: 16px; border-radius: 1px; flex-shrink: 0; }
 .detail-time { font-size: 10px; color: var(--text2); margin-bottom: 3px; font-family: var(--mono); }
 .detail-recur { font-size: 10px; color: var(--accent); font-family: var(--mono); margin-bottom: 3px; }
+.detail-cat { font-size: 9px; font-family: var(--mono); letter-spacing: 1px; margin-bottom: 3px; opacity: .6; }
 .detail-desc { font-size: 10px; color: var(--text3); white-space: pre-wrap; }
+.detail-actions { display: flex; gap: 6px; padding: 10px 14px 14px; }
+.detail-actions button { flex: 1; padding: 8px 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 1px; cursor: pointer; border-radius: 3px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text2); transition: all .12s; }
+.detail-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.detail-actions button.detail-del { border-color: rgba(242,139,154,.35); color: #f28b9a; }
+.detail-actions button.detail-del:hover { background: rgba(242,139,154,.15); border-color: #f28b9a; color: #f28b9a; }
 
 /* CUSTOM DAY PICKER */
 .custom-day-grid { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -269,12 +345,61 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ============ MOBILE (phone / narrow screens) ============ */
+@media (max-width: 820px) {
+  /* topbar: collapse to two rows, kill horizontal crush */
+  .topbar { flex-wrap: wrap; height: auto; padding: 6px 10px; gap: 6px; row-gap: 6px; }
+  .logo { font-size: 12px; }
+  .current-label { min-width: 0; flex: 1 1 100%; order: 3; font-size: 12px; text-align: center; }
+  .view-switcher { margin-left: 0; order: 4; flex: 1 1 100%; display: flex; overflow-x: auto; }
+  .view-btn { flex: 1; padding: 8px 6px; font-size: 11px; }
+  #timeFmt, #hourZoom { display: none; }
+  .topbar-create { padding: 5px 12px 5px 8px; }
+  .today-btn { padding: 5px 10px; }
+
+  /* sidebar: hidden by default, slides over as a drawer via the ☰ button */
+  .menu-btn { display: inline-flex !important; }
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; z-index: 80; width: 260px;
+    transform: translateX(-100%); transition: transform .22s ease; box-shadow: none;
+  }
+  .sidebar.open { transform: translateX(0); box-shadow: 12px 0 40px rgba(0,0,0,.6); }
+  .main-view { width: 100%; }
+
+  /* month cells shrink to phone height */
+  .month-cell { min-height: 72px; padding: 2px; }
+  .month-event { font-size: 9px; padding: 1px 4px; }
+  .day-num { font-size: 9px; }
+
+  /* week / day grids: narrower time gutter, tighter blocks */
+  .week-header-row, .week-time-grid { grid-template-columns: 34px repeat(7, minmax(0,1fr)); }
+  .day-time-grid { grid-template-columns: 34px 1fr; }
+  .time-label { font-size: 8px; padding-right: 4px; }
+  .allday-label { width: 34px; padding-right: 4px; }
+  .week-header-cell .wdate { font-size: 15px; width: 26px; height: 26px; }
+  .week-header-cell .dow { font-size: 8px; }
+  .week-event { padding: 1px 2px; font-size: 8px; left: 1px; right: 1px; }
+  .week-event .ev-name { display: none; }
+  .week-event .ev-time { font-size: 8px; }
+  .day-event { font-size: 10px; }
+
+  /* popup + modal: fit the screen, never overflow */
+  .detail-popup { width: 86vw; max-width: 86vw; }
+  .modal { max-height: 92dvh; display: flex; flex-direction: column; }
+  .modal-body { overflow-y: auto; }
+
+  /* stats / custom views get their own scroll */
+  .main-view > * { min-width: 0; }
+}
 </style>
 </head>
 <body>
 
 <div class="topbar">
+  <button class="menu-btn" onclick="toggleSidebar()" title="Menu">&#9776;</button>
   <div class="logo">CHRONO<span> //</span></div>
+  <div class="topbar-create" onclick="openNewEvent()"><span class="plus-circle">+</span> CREATE</div>
   <button class="today-btn" onclick="goToday()">TODAY</button>
   <div class="nav-btns">
     <button class="nav-btn" onclick="navPrev()">&#8249;</button>
@@ -307,6 +432,16 @@ body {
   <div class="sidebar">
     <button class="new-event-btn" onclick="openNewEvent()"><span class="plus">+</span> NEW EVENT</button>
     <div id="miniCal"></div>
+    <div class="cal-list-section">
+      <div class="cal-list-header"><span>MY CALENDARS</span></div>
+      <div id="calList"></div>
+      <button class="add-cal-btn" onclick="promptNewCalendar()">+ NEW CALENDAR</button>
+      <button class="import-btn" onclick="importHolidays()">&#8681; IMPORT US HOLIDAYS 2026</button>
+      <button class="import-btn" onclick="importLiberty()">&#8681; IMPORT LIBERTY SCHEDULE 2026</button>
+      <button class="import-btn" onclick="exportData()">&#8679; EXPORT EVENTS (JSON)</button>
+      <button class="import-btn" onclick="document.getElementById('importFile').click()">&#8681; IMPORT EVENTS (JSON)</button>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importDataFile(this)">
+    </div>
     <div class="legend">
       <div class="legend-title">// CATEGORIES</div>
       <div class="legend-item"><div class="legend-dot" style="background:#7dd8f0"></div>WORK</div>
@@ -368,6 +503,10 @@ body {
         <label>TITLE</label>
         <input type="text" id="evTitle" placeholder="Event title" />
       </div>
+      <div class="form-row">
+        <label>CALENDAR</label>
+        <select id="evCalendar"></select>
+      </div>
       <div class="form-row-inline">
         <div class="form-row">
           <label>DATE</label>
@@ -384,6 +523,27 @@ body {
       <div id="timeRow" class="form-row-inline">
         <div class="form-row"><label>START</label><input type="time" id="evStart" value="09:00" /></div>
         <div class="form-row"><label>END</label><input type="time" id="evEnd" value="10:00" /></div>
+      </div>
+      <div id="durRow" class="form-row">
+        <label>DURATION — pick one, or set CUSTOM hours/minutes (auto-fills END from START)</label>
+        <div class="recur-opts" id="durOpts">
+          <button type="button" class="recur-opt" onclick="setDur(this,30)">30M</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,45)">45M</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,60)">1H</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,90)">1H30M</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,120)">2H</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,180)">3H</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,240)">4H</button>
+          <button type="button" class="recur-opt" onclick="setDur(this,'custom')">CUSTOM</button>
+        </div>
+        <div class="form-row-inline" id="durCustomRow" style="display:none;margin-top:8px">
+          <div class="form-row"><label>HOURS</label><input type="number" id="durH" min="0" max="23" value="1" oninput="applyCustomDur()" /></div>
+          <div class="form-row"><label>MINUTES</label><input type="number" id="durM" min="0" max="59" step="5" value="0" oninput="applyCustomDur()" /></div>
+        </div>
+      </div>
+      <div id="allDayEndRow" class="form-row" style="display:none">
+        <label>ENDS (optional — leave blank for one day)</label>
+        <input type="date" id="evAllDayEnd" />
       </div>
       <div class="recur-section">
         <label>REPEAT</label>
@@ -463,14 +623,18 @@ body {
     <div class="detail-title"><div class="detail-color-bar" id="detailColorBar"></div><span id="detailTitle"></span></div>
     <div class="detail-time"  id="detailTime"></div>
     <div class="detail-recur" id="detailRecur"></div>
-    <div class="detail-cat"   id="detailCat" style="font-size:9px;font-family:var(--mono);letter-spacing:1px;margin-bottom:3px;opacity:.6"></div>
+    <div class="detail-cat"   id="detailCat"></div>
     <div class="detail-desc"  id="detailDesc"></div>
+  </div>
+  <div class="detail-actions">
+    <button onclick="editFromDetail()">EDIT</button>
+    <button class="detail-del" onclick="deleteFromDetail()">DELETE</button>
   </div>
 </div>
 
 <script>
 const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-const WDAYS  = ['MON','TUE','WED','THU','FRI','SAT','SUN']; // Monday-first column order
+const WDAYS  = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const COLOR_HEX = { '':'#7dd8f0','ev-green':'#7dddb0','ev-red':'#f28b9a','ev-yellow':'#f5d57a','ev-purple':'#c4b0f7','ev-teal':'#a8b8e8','ev-orange':'#f5b07a','ev-lime':'#d8f07a','ev-pink':'#f7c8e0' };
 const CAT_LABEL = { '':'WORK','ev-green':'PERSONAL','ev-orange':'FITNESS','ev-yellow':'TRAVEL','ev-teal':'SLEEP','ev-purple':'FINANCE','ev-red':'SOCIAL','ev-lime':'MEALS','ev-pink':'HYGIENE' };
@@ -487,51 +651,16 @@ function recurLabel(ev) {
 let today      = new Date();
 let cursor     = new Date(today);
 let view       = 'week';
-let customDays = JSON.parse(localStorage.getItem('chrono_custom_days') || '[1,2,3,4,5]'); // Mon–Fri default
+let customDays = JSON.parse(localStorage.getItem('chrono_custom_days') || '[1,2,3,4,5]');
 let events     = JSON.parse(localStorage.getItem('chrono_v2_events')     || '[]');
 let exceptions = JSON.parse(localStorage.getItem('chrono_v2_exceptions') || '{}');
-
-// ---- SEED: workout schedule v2 (post-work, after changeover 15:30-16:00) ----
-(function seedWorkouts(){
-  // Always reconcile: wipe any existing workout seeds and re-apply current schedule
-  events = events.filter(e => !(e.id||'').startsWith('seed-w-'));
- // NOTE: sleep seeds are NOT stripped here - reconciled separately below so user edits to sleep survive reloads
-  const mk = (id,title,date,start,end,color,days,desc)=>({
-    id, title, date, allDay:false, start, end, desc:desc||'', color,
-    recurrence:'weekly', recurrenceEnd:'', weeklyDays:days
-  });
-  // Normal days: Work ends 16:30, Drive to Barracks 16:30-16:40, Changeover 16:40-16:50 -> block starts 16:50.
-  // Thursday: Field Day ends 17:30 -> block starts 17:30.
-  const days = [
-    ['mon',1,'2026-11-02','Gym','Push Workout','Push day - see workout app for exercises','16:50'],
-    ['tue',2,'2026-11-03','Gym','Pull Workout','Pull day - see workout app for exercises','16:50'],
-    ['wed',3,'2026-11-04','Track','3-Mile Run','3-mile run - pace work toward sub-18:00','16:50'],
-    ['thu',4,'2026-11-05','Gym','Legs Workout','Legs day - after Field Day','17:30'],
-    ['fri',5,'2026-11-06','Gym','Upper Workout','Upper day - see workout app for exercises','16:50'],
-    ['sat',6,'2026-11-07','Track','Easy Run','Easy aerobic run','16:50'],
-  ];
-  const addMin = function(t,m){ const p=t.split(':'); const tot=(+p[0])*60+(+p[1])+m; return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0'); };
-  const seeds = [];
-  days.forEach(function(d){
-    const k=d[0], wd=d[1], dt=d[2], dest=d[3], wo=d[4], desc=d[5], t0=d[6];
-    seeds.push(mk('seed-w-'+k+'-d1','Drive to '+dest, dt, t0,           addMin(t0,10),  'ev-yellow',[wd]));
-    seeds.push(mk('seed-w-'+k+'-wo',wo,              dt, addMin(t0,10), addMin(t0,80),  'ev-orange',[wd],desc));
-    seeds.push(mk('seed-w-'+k+'-d2','Drive to Barracks', dt, addMin(t0,80), addMin(t0,90),  'ev-yellow',[wd]));
-    seeds.push(mk('seed-w-'+k+'-hy','Hygiene & Changeover into Civvies',       dt, addMin(t0,90), addMin(t0,120), 'ev-pink',[wd]));
-  });
-  // ---- SLEEP: one overnight event 21:30 -> 05:30 next day (8h), every day ----
-  // Seed when missing; heal the old 22:30-06:30 default to 21:30-05:30 exactly once.
-  // If the Commander has customized the times to anything else, leave his event alone.
-  const allWk = [0,1,2,3,4,5,6];
-  const sleepEv = events.find(e => (e.id||'').startsWith('seed-sleep-'));
-  if (!sleepEv) {
-    seeds.push(mk('seed-sleep-night','Sleep','2026-11-01','21:30','05:30','ev-teal',allWk,'Sleep'));
-  } else if (sleepEv.start === '22:30' && sleepEv.end === '06:30') {
-    sleepEv.start = '21:30';
-    sleepEv.end   = '05:30';
-  }
-  events = events.concat(seeds);
-  localStorage.setItem('chrono_v2_events', JSON.stringify(events));
+let calendars  = JSON.parse(localStorage.getItem('chrono_v2_calendars')  || 'null') || [
+  { id:'default', name:'Personal', color:'', visible:true }
+];
+// One-time migration: fix Veterans' Liberty 2026 from old Mon 11/9–Fri 11/13 to correct Tue 11/10–Thu 11/12
+(function(){
+  const ev = events.find(e=>e.calendar==='liberty' && e.title==="Veterans' Day Liberty" && e.date==='2026-11-09');
+  if (ev) { ev.date='2026-11-10'; ev.endDate='2026-11-12'; localStorage.setItem('chrono_v2_events', JSON.stringify(events)); }
 })();
 let editingId  = null;
 let editingOcc = null;
@@ -546,8 +675,6 @@ let pendingDat = null;
 // ---- HOUR ZOOM ----
 let HOUR_ZOOM_MODE = localStorage.getItem('chrono_hour_zoom_mode') || '64';
 let HOUR_PX = HOUR_ZOOM_MODE === 'auto' ? 64 : (parseInt(HOUR_ZOOM_MODE, 10) || 64);
-// AUTO: smallest hour height where the shortest visible timed event's card
-// still fits a time line + title line (~40px). Clamped 64..220.
 function computeAutoHourPx() {
   let minDur = Infinity;
   const todayDs = todayStr();
@@ -564,7 +691,7 @@ function computeAutoHourPx() {
       if (dur <= 0) dur += 1440;
       if (dur > 0 && dur < minDur) minDur = dur;
     });
-  } catch (e) { /* fall through to default */ }
+  } catch (e) { /* fall through */ }
   if (!isFinite(minDur)) return 64;
   return Math.min(520, Math.max(64, Math.ceil(44 * 60 / minDur)));
 }
@@ -586,15 +713,83 @@ function applyHourZoomUI() {
   refreshZoom();
   const s = document.getElementById('hourZoom');
   if (s) s.value = HOUR_ZOOM_MODE;
-  render(); // re-render with computed AUTO height (initial render used default HOUR_PX)
+  render();
 }
 if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', applyHourZoomUI); } else { applyHourZoomUI(); }
+
+// ---- TIME FORMAT (12h / 24h) ----
+let TIME_FMT = localStorage.getItem('chrono_time_fmt') || '12';
+function fmtTime(t) {
+  if (!t) return '';
+  const p = t.split(':'); let h = +p[0]; const m = p[1];
+  if (TIME_FMT === '24') return String(h).padStart(2,'0') + ':' + m;
+  const ap = h < 12 ? 'AM' : 'PM'; let hh = h % 12; if (hh === 0) hh = 12;
+  return hh + ':' + m + ap;
+}
+function fmtHourLbl(i) {
+  if (TIME_FMT === '24') return String(i).padStart(2,'0') + ':00';
+  if (i === 0) return '12AM'; if (i < 12) return i + 'AM'; if (i === 12) return '12PM'; return (i - 12) + 'PM';
+}
+function setTimeFmt(v) { TIME_FMT = v; localStorage.setItem('chrono_time_fmt', v); render(); }
+function applyTimeFmtUI() { const s = document.getElementById('timeFmt'); if (s) s.value = TIME_FMT; }
+if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', applyTimeFmtUI); } else { applyTimeFmtUI(); }
 
 function saveAll() {
   localStorage.setItem('chrono_v2_events', JSON.stringify(events));
   localStorage.setItem('chrono_v2_exceptions', JSON.stringify(exceptions));
+  localStorage.setItem('chrono_v2_calendars', JSON.stringify(calendars));
   if (typeof HOUR_ZOOM_MODE !== 'undefined' && HOUR_ZOOM_MODE === 'auto') refreshZoom();
 }
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function dateStr(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todayStr() { return dateStr(today); }
+function parseLocal(s) { return new Date(s+'T00:00:00'); }
+function addDays(ds,n){ const d=parseLocal(ds); d.setDate(d.getDate()+n); return dateStr(d); }
+
+// ---- CALENDARS ----
+function visibleCalIds() { return calendars.filter(c=>c.visible).map(c=>c.id); }
+function calById(id) { return calendars.find(c=>c.id===id); }
+function renderCalList() {
+  const box = document.getElementById('calList');
+  if (!box) return;
+  box.innerHTML = calendars.map(c => {
+    const swatch = c.color ? (COLOR_HEX[c.color]||'#7dd8f0') : '#7dd8f0';
+    const canDel = c.id !== 'default';
+    return `<div class="cal-row${c.visible?'':' off'}">
+      <div class="cal-swatch" style="background:${swatch}" onclick="toggleCalendar('${c.id}')"></div>
+      <div class="cal-name" onclick="toggleCalendar('${c.id}')" title="${c.name}">${c.name}</div>
+      ${canDel ? `<button class="cal-del" onclick="deleteCalendar('${c.id}')" title="Delete calendar">&#x2715;</button>` : ''}
+    </div>`;
+  }).join('');
+  const sel = document.getElementById('evCalendar');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = calendars.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+    if (prev && calById(prev)) sel.value = prev;
+  }
+}
+function toggleCalendar(id) {
+  const c = calById(id); if (!c) return;
+  c.visible = !c.visible; saveAll(); renderCalList(); render();
+}
+function promptNewCalendar() {
+  const name = prompt('New calendar name:');
+  if (!name || !name.trim()) return;
+  const palette = ['','ev-green','ev-purple','ev-teal','ev-orange','ev-yellow','ev-red'];
+  const used = calendars.map(c=>c.color);
+  const color = palette.find(p=>!used.includes(p)) || palette[calendars.length % palette.length];
+  calendars.push({ id: uid(), name: name.trim(), color, visible: true });
+  saveAll(); renderCalList(); render();
+}
+function deleteCalendar(id) {
+  if (id === 'default') return;
+  const c = calById(id); if (!c) return;
+  if (!confirm(`Delete calendar "${c.name}" and all its events?`)) return;
+  events = events.filter(e => (e.calendar||'default') !== id);
+  calendars = calendars.filter(c => c.id !== id);
+  saveAll(); renderCalList(); render();
+}
+
 // ---- UNDO / REDO ----
 let undoStack=[], redoStack=[], applyingHistory=false;
 const UNDO_LIMIT=100;
@@ -642,31 +837,8 @@ document.addEventListener('keydown',e=>{
   }
 });
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',updateUndoRedoUI);}else{updateUndoRedoUI();}
-function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
-function dateStr(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function todayStr() { return dateStr(today); }
-function parseLocal(s) { return new Date(s+'T00:00:00'); }
-
-// ---- TIME FORMAT (12h / 24h) ----
-let TIME_FMT = localStorage.getItem('chrono_time_fmt') || '12';
-function fmtTime(t) {
-  if (!t) return '';
-  const p = t.split(':'); let h = +p[0]; const m = p[1];
-  if (TIME_FMT === '24') return String(h).padStart(2,'0') + ':' + m;
-  const ap = h < 12 ? 'AM' : 'PM'; let hh = h % 12; if (hh === 0) hh = 12;
-  return hh + ':' + m + ap;
-}
-function fmtHourLbl(i) {
-  if (TIME_FMT === '24') return String(i).padStart(2,'0') + ':00';
-  if (i === 0) return '12AM'; if (i < 12) return i + 'AM'; if (i === 12) return '12PM'; return (i - 12) + 'PM';
-}
-function setTimeFmt(v) { TIME_FMT = v; localStorage.setItem('chrono_time_fmt', v); render(); }
-function applyTimeFmtUI() { const s = document.getElementById('timeFmt'); if (s) s.value = TIME_FMT; }
-if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', applyTimeFmtUI); } else { applyTimeFmtUI(); }
 
 // ---- EXPAND RECURRENCES ----
-// Overnight events (end <= start) are clipped per day: the start day shows
-// cs=ev.start..ce=24:00 and the following day shows cs=00:00..ce=ev.end (cont).
 function overnight(ev){
   if (ev.allDay || !ev.start || !ev.end) return false;
   const a=ev.start.split(':'), b=ev.end.split(':');
@@ -674,10 +846,6 @@ function overnight(ev){
 }
 function pushOcc(result, ev, occ, startDs, endDs){
   if (overnight(ev)) {
-    // An overnight event is ONE continuous block crossing midnight. For per-day
-    // grids/stats it is clipped at midnight, but BOTH halves must be emitted
-    // whenever the portion falls inside [startDs, endDs] — including the
-    // morning continuation of a night that STARTED before the window.
     if (occ >= startDs && occ <= endDs) result.push({ ev, occ, cs: ev.start, ce: '24:00' });
     const nd = dateStr(new Date(parseLocal(occ).getTime() + 864e5));
     if (nd >= startDs && nd <= endDs) result.push({ ev, occ: nd, cs: '00:00', ce: ev.end, cont: occ });
@@ -687,17 +855,30 @@ function pushOcc(result, ev, occ, startDs, endDs){
 }
 function expandRange(startDs, endDs) {
   const result = [];
-  // Scan one day EARLIER than the window so overnight events that began the
-  // night before startDs still contribute their in-window morning half.
   const scanStart = dateStr(new Date(parseLocal(startDs).getTime() - 864e5));
+  const vis = visibleCalIds();
   events.forEach(ev => {
+    if (!vis.includes(ev.calendar||'default')) return;
     const exList = exceptions[ev.id] || [];
     if (!ev.recurrence || ev.recurrence === 'none') {
-      if (ev.date >= scanStart && ev.date <= endDs && !exList.includes(ev.date))
-        pushOcc(result, ev, ev.date, startDs, endDs);
+      // Multi-day (endDate) events expand into one occurrence per day.
+      if (ev.endDate && ev.endDate > ev.date) {
+        let cur = parseLocal(ev.date);
+        const endD = parseLocal(ev.endDate);
+        let safety = 0;
+        while (dateStr(cur) <= dateStr(endD) && safety++ < 370) {
+          const ds = dateStr(cur);
+          if (ds >= scanStart && ds <= endDs && !exList.includes(ds)) {
+            pushOcc(result, ev, ds, startDs, endDs);
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+      } else {
+        if (ev.date >= scanStart && ev.date <= endDs && !exList.includes(ev.date))
+          pushOcc(result, ev, ev.date, startDs, endDs);
+      }
       return;
     }
-    // weekly with specific days: iterate every day in range, match by weekday
     if (ev.recurrence === 'weekly' && ev.weeklyDays && ev.weeklyDays.length) {
       const cap = ev.recurrenceEnd || endDs;
       const rangeStart = parseLocal(scanStart);
@@ -759,7 +940,7 @@ function updateLabel() {
 function renderMonth() {
   const mv = document.getElementById('mainView');
   const yr = cursor.getFullYear(), mo = cursor.getMonth();
-  const off = (new Date(yr, mo, 1).getDay()+6)%7; // Monday-first offset
+  const off = (new Date(yr, mo, 1).getDay()+6)%7;
   const sd = dateStr(new Date(yr,mo,1-off)), ed = dateStr(new Date(yr,mo,42-off));
   const all = expandRange(sd, ed);
   let h = '<div class="month-view"><div class="month-dow-header">'+WDAYS.map(d=>`<div>${d}</div>`).join('')+'</div><div class="month-grid">';
@@ -779,6 +960,47 @@ function renderMonth() {
 
 function wkStart(d) { const s=new Date(d); s.setDate(s.getDate()-((s.getDay()+6)%7)); s.setHours(0,0,0,0); return s; }
 
+// Build one all-day strip where multi-day events render as a single continuous bar
+// spanning their day columns (Google Calendar style). allDayEvs = expanded occurrences
+// for the visible range; cols = array of Date for the visible columns.
+function buildSpanStrip(allDayEvs, cols) {
+  const N = cols.length;
+  const colStart = cols.map(d=>dateStr(d));
+  // Group occurrences by event id, preserving span across columns
+  const groups = new Map(); // id -> {ev, firstIdx, lastIdx, firstOcc}
+  allDayEvs.forEach(({ev,occ})=>{
+    const idx = colStart.indexOf(occ);
+    if (idx<0) return;
+    if (!groups.has(ev.id)) groups.set(ev.id, {ev, firstIdx: idx, lastIdx: idx, firstOcc: occ});
+    else { const g=groups.get(ev.id); if(idx<g.firstIdx)g.firstIdx=idx; if(idx>g.lastIdx)g.lastIdx=idx; }
+  });
+  // Sort segments: longer spans first, then earlier start (Google-style stacking)
+  const segs = [...groups.values()].sort((a,b)=> (b.lastIdx-b.firstIdx)-(a.lastIdx-a.firstIdx) || a.firstIdx-b.firstIdx);
+  // Lane assignment: first-fit into rows
+  const laneEnds = []; // per lane, last occupied column index
+  segs.forEach(g=>{
+    let lane = laneEnds.findIndex(end=>g.firstIdx>end);
+    if (lane<0) { lane = laneEnds.length; laneEnds.push(-1); }
+    g.lane = lane; laneEnds[lane] = g.lastIdx;
+  });
+  const lanes = laneEnds.length || 1;
+  const trackH = Math.max(20, lanes*20+3);
+  const colW = 100/N;
+  let h = `<div class="allday-row"><div class="allday-label">ALL DAY</div><div class="allday-track" style="height:${trackH}px" onclick="alldayStripClick(event,'${colStart[0]}',${N})">`;
+  segs.forEach(g=>{
+    const rm = g.ev.recurrence&&g.ev.recurrence!=='none'?'↻ ':'';
+    const isStart = g.firstIdx===0 || !g.ev.endDate || (g.ev.date >= colStart[0]);
+    const isEnd = g.lastIdx===N-1 ? (!g.ev.endDate || g.ev.endDate<=colStart[N-1]) : true;
+    const startsInRange = !g.ev.endDate || g.ev.date >= colStart[0];
+    const endsInRange = !g.ev.endDate || g.ev.endDate <= colStart[N-1];
+    const cls = (startsInRange?'span-start ':'')+(endsInRange?'span-end ':'');
+    const left = (g.firstIdx*colW).toFixed(4), width = ((g.lastIdx-g.firstIdx+1)*colW).toFixed(4);
+    h += `<div class="allday-span ${cls}${g.ev.color||''}" style="left:calc(${left}% + 1px);width:calc(${width}% - 3px);top:${g.lane*20+2}px" onclick="showDetail(event,'${g.ev.id}','${g.firstOcc}')">${rm}${g.ev.title}</div>`;
+  });
+  h += '</div></div>';
+  return h;
+}
+
 function renderWeek() {
   const mv = document.getElementById('mainView');
   const ws = wkStart(cursor);
@@ -789,7 +1011,11 @@ function renderWeek() {
     const isT = dateStr(d)===todayStr();
     h += `<div class="week-header-cell${isT?' today':''}"><div class="dow">${DAYS[d.getDay()]}</div><div class="wdate" onclick="goDay('${dateStr(d)}')">${d.getDate()}</div></div>`;
   });
-  h += '</div><div class="week-time-grid"><div class="time-labels">';
+  h += '</div>'; // close week-header-row
+  // ALL-DAY STRIP — Google Calendar style: each event renders as ONE bar spanning its days
+  const allDayEvs = all.filter(x=>x.ev.allDay);
+  h += buildSpanStrip(allDayEvs, cols);
+  h += '<div class="week-time-grid"><div class="time-labels">';
   for(let i=0;i<24;i++) h += `<div class="time-label">${i===0?'':fmtHourLbl(i)}</div>`;
   h += '</div>';
   cols.forEach(d=>{
@@ -805,17 +1031,29 @@ function renderWeek() {
       const ht=Math.max(((eh*60+em)-(sh*60+sm))/60*HOUR_PX,8);
       const rm=ev.recurrence&&ev.recurrence!=='none'?'↻ ':'';
       const L=lay[ev.id+'|'+occ]||{left:0,width:100};
-      h += `<div class="week-event ${ev.color||''}" style="top:${top}px;height:${ht}px;left:calc(${L.left}% + 1px);width:calc(${L.width}% - 2px);right:auto" onclick="showDetail(event,'${ev.id}','${occ}')"><div class="ev-time">${fmtTime(csT)}–${fmtTime(ceT)}</div><div class="ev-name">${rm}${ev.title}</div></div>`;
+      h += `<div class="week-event ${ev.color||''}" data-drag-id="${ev.id}" data-drag-occ="${occ}" style="top:${top}px;height:${ht}px;left:calc(${L.left}% + 1px);width:calc(${L.width}% - 2px);right:auto" onclick="showDetail(event,'${ev.id}','${occ}')"><div class="ev-time">${fmtTime(csT)}–${fmtTime(ceT)}</div><div class="ev-name">${rm}${ev.title}</div></div>`;
     });
     if(isT){const n=new Date(),p=(n.getHours()*60+n.getMinutes())/60*HOUR_PX;h+=`<div class="now-line" style="top:${p}px"></div>`;}
     h += '</div>';
   });
-  mv.innerHTML = h+'</div></div>';
-  setTimeout(()=>{const tg=mv.querySelector('.week-time-grid');if(tg)tg.scrollTop=7*HOUR_PX;},0);
+  restoreGridScroll(mv, h+'</div></div>');
+}
+
+// Keep the user's scroll position across re-renders (e.g. after delete/edit).
+// On the very first paint of a view, center on 07:00 like before.
+let lastGridScroll = null;
+function restoreGridScroll(mv, html){
+  const gridSel = '.week-time-grid, .day-time-grid';
+  const old = mv.querySelector(gridSel);
+  if (old && old.scrollTop > 0) lastGridScroll = old.scrollTop;
+  mv.innerHTML = html;
+  setTimeout(()=>{
+    const tg = mv.querySelector(gridSel);
+    if (tg) tg.scrollTop = (lastGridScroll !== null ? lastGridScroll : 7*HOUR_PX);
+  },0);
 }
 
 function layoutOverlap(items){
-  // items: [{ev,occ,cs,ce}] -> map from ev.id+occ to {leftPct,widthPct}
   const evs=items.map(({ev,occ,cs,ce})=>{
     const [sh,sm]=(cs||ev.start).split(':').map(Number),[eh,em]=(ce||ev.end).split(':').map(Number);
     return {ev,occ,s:sh*60+sm,e:eh*60+em};
@@ -828,7 +1066,7 @@ function layoutOverlap(items){
   }
   if(cluster)clusters.push(cluster);
   for(const cl of clusters){
-    const lanes=[]; // each lane = end time
+    const lanes=[];
     for(const it of cl){
       let placed=false;
       for(let i=0;i<lanes.length;i++){
@@ -850,6 +1088,8 @@ function renderDay() {
   const ds = dateStr(cursor), isT = ds===todayStr();
   const all = expandRange(ds,ds);
   let h = `<div class="day-view"><div class="day-header${isT?' today':''}"><div class="dow">${DAYS[cursor.getDay()]}</div><div class="ddate">${String(cursor.getDate()).padStart(2,'0')}</div></div>`;
+  const dayAllDay = all.filter(x=>x.ev.allDay);
+  h += buildSpanStrip(dayAllDay, [new Date(cursor)]);
   h += '<div class="day-time-grid"><div class="time-labels">';
   for(let i=0;i<24;i++) h += `<div class="time-label">${i===0?'':fmtHourLbl(i)}</div>`;
   h += `</div><div class="day-col" onclick="colClick('${ds}',event)">`;
@@ -862,16 +1102,15 @@ function renderDay() {
     const top=(sh*60+sm)/60*HOUR_PX, ht=Math.max(((eh*60+em)-(sh*60+sm))/60*HOUR_PX,8);
     const rm=ev.recurrence&&ev.recurrence!=='none'?'↻ ':'';
     const L=dayLay[ev.id+'|'+occ]||{left:0,width:100};
-    h += `<div class="day-event ${ev.color||''}" style="top:${top}px;height:${ht}px;left:calc(${L.left}% + 2px);width:calc(${L.width}% - 4px);right:auto" onclick="showDetail(event,'${ev.id}','${occ}')"><strong>${fmtTime(csT)}–${fmtTime(ceT)}</strong><br>${rm}${ev.title}</div>`;
+    h += `<div class="day-event ${ev.color||''}" data-drag-id="${ev.id}" data-drag-occ="${occ}" style="top:${top}px;height:${ht}px;left:calc(${L.left}% + 2px);width:calc(${L.width}% - 4px);right:auto" onclick="showDetail(event,'${ev.id}','${occ}')"><strong>${fmtTime(csT)}–${fmtTime(ceT)}</strong><br>${rm}${ev.title}</div>`;
   });
   if(isT){const n=new Date(),p=(n.getHours()*60+n.getMinutes())/60*HOUR_PX;h+=`<div class="now-line" style="top:${p}px"></div>`;}
-  mv.innerHTML = h+'</div></div></div>';
-  setTimeout(()=>{const tg=mv.querySelector('.day-time-grid');if(tg)tg.scrollTop=7*HOUR_PX;},0);
+  restoreGridScroll(mv, h+'</div></div></div>');
 }
 
 function renderMini() {
   const y=miniCursor.getFullYear(),m=miniCursor.getMonth();
-  const off=(new Date(y,m,1).getDay()+6)%7; // Monday-first offset
+  const off=(new Date(y,m,1).getDay()+6)%7;
   let h=`<div class="mini-header"><button class="mini-nav" onclick="miniPrev()">&#8249;</button><span class="mini-month">${MONTHS[m].slice(0,3).toUpperCase()} ${y}</span><button class="mini-nav" onclick="miniNext()">&#8250;</button></div>`;
   h += `<table class="mini-grid"><thead><tr>${WDAYS.map(d=>`<th>${d[0]}</th>`).join('')}</tr></thead><tbody>`;
   let day=1-off;
@@ -889,7 +1128,10 @@ function renderMini() {
 }
 
 // ---- NAV ----
-function setView(v){view=v;render();}
+function setView(v){view=v;render();closeSidebar();}
+function toggleSidebar(){document.querySelector('.sidebar').classList.toggle('open');}
+function closeSidebar(){const sb=document.querySelector('.sidebar');if(sb)sb.classList.remove('open');}
+document.getElementById('mainView').addEventListener('click',function(){if(window.innerWidth<=820)closeSidebar();});
 function goToday(){cursor=new Date(today);miniCursor=new Date(today);render();}
 function navPrev(){if(view==='month')cursor.setMonth(cursor.getMonth()-1);else if(view==='week'||view==='custom')cursor.setDate(cursor.getDate()-7);else cursor.setDate(cursor.getDate()-1);miniCursor=new Date(cursor);render();}
 function navNext(){if(view==='month')cursor.setMonth(cursor.getMonth()+1);else if(view==='week'||view==='custom')cursor.setDate(cursor.getDate()+7);else cursor.setDate(cursor.getDate()+1);miniCursor=new Date(cursor);render();}
@@ -900,6 +1142,13 @@ function goDay(ds){cursor=parseLocal(ds);view='day';render();}
 
 // ---- INTERACTIONS ----
 function cellClick(ds,e){if(e.target.classList.contains('month-event'))return;openNewEvent(ds);}
+function alldayStripClick(e,startDs,nCols){
+  if(e.target.classList.contains('allday-span'))return; // let the event bar handle its own click
+  const track=e.currentTarget.getBoundingClientRect();
+  const idx=Math.max(0,Math.min(nCols-1,Math.floor((e.clientX-track.left)/track.width*nCols)));
+  const d=parseLocal(startDs); d.setDate(d.getDate()+idx);
+  openNewEvent(dateStr(d),null,null,true);
+}
 function colClick(ds,e){
   if(e.target.classList.contains('week-event')||e.target.classList.contains('day-event'))return;
   const rect=e.currentTarget.getBoundingClientRect(),hr=Math.floor((e.clientY-rect.top)/HOUR_PX);
@@ -914,7 +1163,6 @@ function setRecur(el){
   const isWeekly = selRecur==='weekly';
   document.getElementById('weeklyDaysRow').classList.toggle('show', isWeekly);
   if(isWeekly && selWeeklyDays.length===0){
-    // default to the event's current date day
     const dateVal = document.getElementById('evDate').value;
     if(dateVal){ const d=parseLocal(dateVal); selWeeklyDays=[d.getDay()]; }
     syncWeeklyDayBtns();
@@ -925,24 +1173,27 @@ function syncWeeklyDayBtns(){
     b.classList.toggle('active', selWeeklyDays.includes(parseInt(b.dataset.wd)));
   });
 }
-// wire weekly day toggle buttons
 document.addEventListener('click', e=>{
   if(!e.target.classList.contains('weekly-day-btn')) return;
   const wd = parseInt(e.target.dataset.wd);
   if(selWeeklyDays.includes(wd)){
-    if(selWeeklyDays.length===1) return; // keep at least 1
+    if(selWeeklyDays.length===1) return;
     selWeeklyDays = selWeeklyDays.filter(x=>x!==wd);
   } else {
     selWeeklyDays.push(wd);
   }
   syncWeeklyDayBtns();
 });
-function openNewEvent(ds,start,end){
+function openNewEvent(ds,start,end,allDay){
   editingId=null;editingOcc=null;
   document.getElementById('modalTitle').textContent='// NEW EVENT';
   document.getElementById('evTitle').value='';
   document.getElementById('evDate').value=ds||dateStr(cursor);
-  document.getElementById('evAllDay').value='no';
+  document.getElementById('evAllDayEnd').value='';
+  renderCalList();
+  document.getElementById('evCalendar').value='default';
+  document.getElementById('evAllDay').value=allDay?'yes':'no';
+  toggleTime();
   document.getElementById('evStart').value=start||'09:00';
   document.getElementById('evEnd').value=end||'10:00';
   document.getElementById('evDesc').value='';
@@ -954,6 +1205,7 @@ function openNewEvent(ds,start,end){
   selRecur='none'; selWeeklyDays=[]; document.getElementById('recurEndRow').classList.remove('show'); document.getElementById('weeklyDaysRow').classList.remove('show'); syncWeeklyDayBtns();
   document.querySelectorAll('.cat-btn').forEach(b=>{b.classList.remove('active');b.style.borderColor='';b.style.background='';});
   const defCat = document.querySelector('.cat-btn[data-cat=""]'); if(defCat) pickCat(defCat);
+  resetDurUI();
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('evTitle').focus(),50);
 }
@@ -963,7 +1215,10 @@ function openEditEvent(id,occ){
   document.getElementById('modalTitle').textContent='// EDIT EVENT';
   document.getElementById('evTitle').value=ev.title;
   document.getElementById('evDate').value=occ||ev.date;
+  renderCalList();
+  document.getElementById('evCalendar').value=ev.calendar||'default';
   document.getElementById('evAllDay').value=ev.allDay?'yes':'no';
+  document.getElementById('evAllDayEnd').value=ev.endDate||'';
   document.getElementById('evStart').value=ev.start||'09:00';
   document.getElementById('evEnd').value=ev.end||'10:00';
   document.getElementById('evDesc').value=ev.desc||'';
@@ -982,11 +1237,17 @@ function openEditEvent(id,occ){
   document.querySelectorAll('.cat-btn').forEach(b=>{b.classList.remove('active');b.style.borderColor='';b.style.background='';});
   const catBtn = document.querySelector(`.cat-btn[data-cat="${ev.color||''}"]`);
   if(catBtn) pickCat(catBtn);
+  resetDurUI();
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
 function closeModalOverlay(e){if(e.target===document.getElementById('modalOverlay'))closeModal();}
-function toggleTime(){document.getElementById('timeRow').style.display=document.getElementById('evAllDay').value==='yes'?'none':'';}
+function toggleTime(){
+  const isAll=document.getElementById('evAllDay').value==='yes';
+  document.getElementById('timeRow').style.display=isAll?'none':'';
+  document.getElementById('allDayEndRow').style.display=isAll?'':'none';
+  const dr=document.getElementById('durRow'); if(dr) dr.style.display=isAll?'none':'';
+}
 function pickCat(el){
   document.querySelectorAll('.cat-btn').forEach(b=>{b.classList.remove('active');b.style.borderColor='';b.style.background='';});
   el.classList.add('active');
@@ -994,13 +1255,45 @@ function pickCat(el){
   el.style.background = el.dataset.hex + '22';
 }
 
+// ---- DURATION ----
+// setDur: pick a preset chip (minutes) or 'custom'; auto-computes END from START.
+function setDur(el,mins){
+  document.querySelectorAll('#durOpts .recur-opt').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  const custom = mins==='custom';
+  document.getElementById('durCustomRow').style.display = custom?'':'none';
+  if(custom){ applyCustomDur(); return; }
+  applyDurMinutes(mins);
+}
+function applyCustomDur(){
+  const h=parseInt(document.getElementById('durH').value)||0;
+  const m=parseInt(document.getElementById('durM').value)||0;
+  applyDurMinutes(h*60+m);
+}
+function applyDurMinutes(mins){
+  if(!mins||mins<=0) return;
+  const startVal=document.getElementById('evStart').value||'09:00';
+  const [sh,sm]=startVal.split(':').map(Number);
+  let tot=sh*60+sm+mins;
+  if(tot>24*60-1) tot=24*60-1; // cap at 23:59 same day
+  const eh=String(Math.floor(tot/60)).padStart(2,'0'), em=String(tot%60).padStart(2,'0');
+  document.getElementById('evEnd').value=eh+':'+em;
+}
+// Reset duration UI when opening a modal
+function resetDurUI(){
+  document.querySelectorAll('#durOpts .recur-opt').forEach(b=>b.classList.remove('active'));
+  document.getElementById('durCustomRow').style.display='none';
+}
+
 function collectForm(){
   const allDay=document.getElementById('evAllDay').value==='yes';
   return {
     title:document.getElementById('evTitle').value.trim(),
     date:document.getElementById('evDate').value,
+    calendar:document.getElementById('evCalendar').value||'default',
     allDay, start:allDay?'00:00':document.getElementById('evStart').value,
     end:allDay?'23:59':document.getElementById('evEnd').value,
+    endDate: (()=>{ if(!allDay) return ''; const e=document.getElementById('evAllDayEnd').value; const d=document.getElementById('evDate').value; return (e && e>=d) ? e : ''; })(),
     desc:document.getElementById('evDesc').value.trim(),
     color:document.querySelector('.cat-btn.active')?.dataset.cat||'',
     recurrence:selRecur,
@@ -1039,8 +1332,134 @@ function confirmRecurAction(){
   } else if(pendingAct==='save'){
     if(scope==='all'){const i=events.findIndex(e=>e.id===editingId);if(i>=0)events[i]={id:editingId,...pendingDat};}
     else{if(!exceptions[editingId])exceptions[editingId]=[];exceptions[editingId].push(editingOcc);events.push({id:uid(),...pendingDat,recurrence:'none',recurrenceEnd:''});}
+  } else if(pendingAct==='move'){
+    const ev=events.find(e=>e.id===editingId); if(!ev){saveAll();render();pendingAct=null;pendingDat=null;return;}
+    if(scope==='all'){
+      ev.start=pendingDat.start; ev.end=pendingDat.end;
+    } else {
+      if(!exceptions[editingId])exceptions[editingId]=[];exceptions[editingId].push(editingOcc);
+      events.push({...ev,id:uid(),date:editingOcc,start:pendingDat.start,end:pendingDat.end,recurrence:'none',recurrenceEnd:'',weeklyDays:[]});
+    }
   }
   saveAll();render();pendingAct=null;pendingDat=null;
+}
+
+// ---- DRAG-TO-MOVE (5-minute snap) ----
+// Grab a timed event block and drag it up/down; snaps to 5-minute steps and
+// shows the new time range live. On release it updates the event; recurring
+// events prompt "this occurrence vs whole series" via the shared recurDialog.
+let dragSt=null;
+const SNAP_MIN=5;
+function t2m(t){const[a,b]=t.split(':').map(Number);return a*60+b;}
+function m2t(m){const h=String(Math.floor(m/60)).padStart(2,'0'),mm=String(m%60).padStart(2,'0');return h+':'+mm;}
+document.addEventListener('pointerdown',e=>{
+  const el=e.target.closest('[data-drag-id]');
+  if(!el) return;
+  const ev=events.find(x=>x.id===el.dataset.dragId);
+  if(!ev||ev.allDay) return;
+  const col=el.closest('.week-day-col,.day-col'); if(!col) return;
+  // Overnight events (end <= start, e.g. Sleep 21:30-05:30) are rendered as
+  // TWO blocks: the evening block on the event's own day (occ === ev's date)
+  // and the morning block on the next day (occ = next day). Work in absolute
+  // minutes where the end can exceed 1440 so the duration is never negative.
+  const startM=t2m(ev.start);
+  let endM=t2m(ev.end);
+  const isOvernight = endM<=startM;
+  if(isOvernight) endM+=1440; // unwrap across midnight -> real duration
+  const dur=endM-startM;
+  // Which segment did we grab? If this block's occurrence date is AFTER the
+  // event's anchor date, it's the morning continuation block (00:00 -> end).
+  // Otherwise it's the main evening block (start -> 24:00).
+  const anchorDs = ev.date;
+  const occDs = el.dataset.dragOcc;
+  const isMorningSeg = isOvernight && occDs>anchorDs;
+  // The on-screen start minute of THIS block:
+  const segStartM = isMorningSeg ? 0 : startM;
+  dragSt={
+    ev, el, occ:occDs,
+    colRect: col.getBoundingClientRect(),
+    grabMin: Math.round((e.clientY-col.getBoundingClientRect().top)/HOUR_PX*60/SNAP_MIN)*SNAP_MIN,
+    startM, endM, dur, isOvernight, isMorningSeg, segStartM,
+    moved:false
+  };
+});
+document.addEventListener('pointermove',e=>{
+  if(!dragSt) return;
+  const y=e.clientY-dragSt.colRect.top;
+  let under=Math.round(y/HOUR_PX*60/SNAP_MIN)*SNAP_MIN; // snapped minute under cursor
+  // Move THIS block; its on-screen length is what clamps the drag.
+  const segLen = dragSt.isMorningSeg ? (dragSt.endM-1440) : (dragSt.isOvernight ? (1440-dragSt.startM) : dragSt.dur);
+  let newSegStart=Math.max(0,Math.min(24*60-segLen, under-(dragSt.grabMin-dragSt.segStartM)));
+  if(newSegStart===dragSt.segStartM && !dragSt.moved) return;
+  if(!dragSt.moved){
+    // First real move: spawn the ghost clone and hide the original block.
+    // From here on ONLY the ghost moves — the rendered grid is never touched,
+    // which kills the screen flash the live style.top mutation was causing.
+    dragSt.moved=true;
+    const g=dragSt.el.cloneNode(true);
+    g.classList.add('drag-ghost');
+    g.removeAttribute('data-drag-id'); g.removeAttribute('onclick');
+    g.style.left=dragSt.el.offsetLeft+'px';
+    g.style.width=dragSt.el.offsetWidth+'px';
+    g.style.top=dragSt.el.offsetTop+'px';
+    g.style.height=dragSt.el.offsetHeight+'px';
+    dragSt.el.parentElement.appendChild(g);
+    dragSt.ghost=g;
+    dragSt.el.classList.add('drag-origin-hidden');
+  }
+  dragSt.newSegStart=newSegStart;
+  // Convert the block's new on-screen start back to the event's absolute start.
+  let newAbsStart;
+  if(dragSt.isMorningSeg){
+    newAbsStart = dragSt.startM + (newSegStart - dragSt.segStartM);
+  } else {
+    newAbsStart = newSegStart;
+  }
+  dragSt.newStart = newAbsStart;
+  dragSt.ghost.style.top=(newSegStart/60*HOUR_PX)+'px';
+  const tl=dragSt.ghost.querySelector('.ev-time')||dragSt.ghost.querySelector('strong');
+  if(tl) tl.textContent=fmtTime(m2t(newSegStart))+'–'+fmtTime(m2t(newSegStart+segLen));
+});
+let suppressNextClick=false;
+document.addEventListener('pointerup',()=>{
+  if(!dragSt) return;
+  const st=dragSt; dragSt=null;
+  if(!st.moved) return; // was a plain click — let onclick handle detail popup
+  // Clean up ghost + restore original before committing.
+  if(st.ghost) st.ghost.remove();
+  st.el.classList.remove('drag-origin-hidden');
+  suppressNextClick=true;
+  setTimeout(()=>{suppressNextClick=false;},50);
+  applyDragMove(st);
+});
+// Safety net: if the pointer is cancelled mid-drag (window blur, touch cancel),
+// never leave a ghost or a hidden block stranded.
+document.addEventListener('pointercancel',()=>{
+  if(!dragSt) return;
+  if(dragSt.ghost) dragSt.ghost.remove();
+  dragSt.el.classList.remove('drag-origin-hidden');
+  dragSt=null;
+});
+// Swallow the click that follows a real drag so the detail popup doesn't open
+document.addEventListener('click',e=>{
+  if(suppressNextClick && e.target.closest('[data-drag-id]')){ e.stopPropagation(); e.preventDefault(); }
+},true);
+function applyDragMove(st){
+  // st.newStart is the event's absolute start minute; wrap end across midnight
+  // with modulo so overnight events (Sleep) shift cleanly on both days.
+  const sMin=((st.newStart%1440)+1440)%1440;
+  const eMin=((sMin+st.dur)%1440);
+  const ns=m2t(sMin), ne=m2t(eMin);
+  const ev=st.ev;
+  const commit=(target)=>{ target.start=ns; target.end=ne; };
+  if(!ev.recurrence||ev.recurrence==='none'){
+    pushHistory(); commit(ev); saveAll(); render(); return;
+  }
+  // Recurring: route through the shared scope dialog as a 'move' action
+  pendingAct='move'; pendingDat={start:ns,end:ne};
+  editingId=ev.id; editingOcc=st.occ;
+  document.querySelector('input[name=recurScope][value="this"]').checked=true;
+  document.getElementById('recurDialog').classList.add('open');
 }
 
 // ---- DETAIL ----
@@ -1081,7 +1500,6 @@ function renderCustom() {
     return;
   }
   const sorted = [...customDays].sort((a,b)=>a-b);
-  // find the most recent occurrence of sorted[0] from cursor
   const anchor = new Date(cursor);
   const curDay = anchor.getDay();
   const firstDay = sorted[0];
@@ -1104,7 +1522,10 @@ function renderCustom() {
     const isT = dateStr(d)===todayStr();
     h += `<div class="week-header-cell${isT?' today':''}"><div class="dow">${DAYS[d.getDay()]}</div><div class="wdate" onclick="goDay('${dateStr(d)}')">${d.getDate()}</div></div>`;
   });
-  h += `</div><div class="week-time-grid" style="grid-template-columns:56px repeat(${colCount},1fr)"><div class="time-labels">`;
+  h += '</div>'; // close week-header-row
+  const cAllDay = all.filter(x=>x.ev.allDay);
+  h += buildSpanStrip(cAllDay, cols);
+  h += `<div class="week-time-grid" style="grid-template-columns:56px repeat(${colCount},1fr)"><div class="time-labels">`;
   for(let i=0;i<24;i++) h += `<div class="time-label">${i===0?'':fmtHourLbl(i)}</div>`;
   h += '</div>';
   cols.forEach(d => {
@@ -1120,29 +1541,16 @@ function renderCustom() {
       const ht=Math.max(((eh*60+em)-(sh*60+sm))/60*HOUR_PX,8);
       const rm=ev.recurrence&&ev.recurrence!=='none'?'↻ ':'';
       const L=lay[ev.id+'|'+occ]||{left:0,width:100};
-      h += `<div class="week-event ${ev.color||''}" style="top:${top}px;height:${ht}px;left:calc(${L.left}% + 1px);width:calc(${L.width}% - 2px);right:auto" onclick="showDetail(event,'${ev.id}','${occ}')"><div class="ev-time">${fmtTime(csT)}–${fmtTime(ceT)}</div><div class="ev-name">${rm}${ev.title}</div></div>`;
+      h += `<div class="week-event ${ev.color||''}" data-drag-id="${ev.id}" data-drag-occ="${occ}" style="top:${top}px;height:${ht}px;left:calc(${L.left}% + 1px);width:calc(${L.width}% - 2px);right:auto" onclick="showDetail(event,'${ev.id}','${occ}')"><div class="ev-time">${fmtTime(csT)}–${fmtTime(ceT)}</div><div class="ev-name">${rm}${ev.title}</div></div>`;
     });
     if(isT){const n=new Date(),p=(n.getHours()*60+n.getMinutes())/60*HOUR_PX;h+=`<div class="now-line" style="top:${p}px"></div>`;}
     h += '</div>';
   });
-  mv.innerHTML = h+'</div></div>';
-  setTimeout(()=>{const tg=mv.querySelector('.week-time-grid');if(tg)tg.scrollTop=7*HOUR_PX;},0);
+  restoreGridScroll(mv, h+'</div></div>');
 }
-
-function navCustomPrev() {
-  if(!customDays.length)return;
-  cursor.setDate(cursor.getDate()-7); miniCursor=new Date(cursor); render();
-}
-function navCustomNext() {
-  if(!customDays.length)return;
-  cursor.setDate(cursor.getDate()+7); miniCursor=new Date(cursor); render();
-}
-
-
 
 // ---- CUSTOM CFG MODAL ----
 function openCustomCfg() {
-  // sync button states
   document.querySelectorAll('.custom-day-btn').forEach(btn => {
     const d = parseInt(btn.dataset.d);
     btn.classList.toggle('active', customDays.includes(d));
@@ -1156,7 +1564,7 @@ document.querySelectorAll('.custom-day-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const d = parseInt(btn.dataset.d);
     if (customDays.includes(d)) {
-      if (customDays.length === 1) return; // keep at least 1
+      if (customDays.length === 1) return;
       customDays = customDays.filter(x=>x!==d);
     } else {
       customDays.push(d);
@@ -1181,13 +1589,11 @@ function saveCustomCfg() {
 // ---- STATS VIEW ----
 function renderStats() {
   const mv = document.getElementById('mainView');
-  // 7-day window: current week Sun-Sat
   const ws = wkStart(cursor);
   const sd = dateStr(ws), ed = dateStr(new Date(ws.getTime() + 6*864e5));
   const all = expandRange(sd, ed);
 
-  // Accumulate minutes per category (and per 8/8/8 bucket)
-  const catMin = {};   // color -> minutes
+  const catMin = {};
   const bucketMin = { work:0, sleep:0, personal:0 };
   const BUCKET = { '':'work','ev-yellow':'work','ev-teal':'sleep',
     'ev-green':'personal','ev-orange':'personal','ev-lime':'personal',
@@ -1207,12 +1613,10 @@ function renderStats() {
   const cats = Object.keys(catMin).sort((a,b)=>catMin[b]-catMin[a]);
   const hrs = m => (m/60).toFixed(1);
 
-  // ---- PIE CHART (canvas) ----
   let h = '<div style="display:flex;flex-wrap:wrap;gap:28px;padding:24px;overflow-y:auto;height:100%;box-sizing:border-box;align-content:flex-start">';
   h += '<div style="flex:0 0 auto"><div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px">// TIME BY CATEGORY — THIS WEEK</div>';
   h += '<canvas id="catPie" width="260" height="260" style="display:block"></canvas></div>';
 
-  // ---- CATEGORY TABLE ----
   h += '<div style="flex:1 1 260px;min-width:250px"><div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px">// HOURS BY CATEGORY</div>';
   h += '<table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px">';
   cats.forEach(c => {
@@ -1222,10 +1626,8 @@ function renderStats() {
   });
   h += '</table></div>';
 
-  // ---- 8/8/8 BREAKDOWN ----
-  const target = 8 * 7; // hours per week per bucket
+  const target = 8 * 7;
   const bks = [['work','WORK','#7dd8f0'],['sleep','SLEEP','#a8b8e8'],['personal','PERSONAL / FREE','#7dddb0']];
-  // Which categories belong in each bucket (built from BUCKET so it always matches the math)
   const bucketCats = { work:[], sleep:[], personal:[] };
   Object.keys(CAT_LABEL).forEach(c => { bucketCats[BUCKET[c]||'personal'].push(c); });
   h += '<div style="flex:1 1 100%;margin-top:8px"><div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:4px">// 8 / 8 / 8 RULE — 8H WORK · 8H SLEEP · 8H PERSONAL (PER DAY)</div>';
@@ -1245,7 +1647,6 @@ function renderStats() {
   h += '</table></div></div>';
   mv.innerHTML = h;
 
-  // Draw pie
   const cv = document.getElementById('catPie');
   if (cv && cv.getContext) {
     const ctx = cv.getContext('2d');
@@ -1273,6 +1674,173 @@ function renderStats() {
   }
 }
 
+// ---- IMPORTS ----
+function ensureCalendar(id,name,color){
+  let c = calById(id);
+  if (!c) { c = { id, name, color, visible:true }; calendars.push(c); }
+  return c;
+}
+function addImportedEvent(calId, title, date, endDate, desc, color){
+  const exists = events.some(e=>e.calendar===calId && e.title===title && e.date===date);
+  if (exists) return false;
+  events.push({
+    id:uid(), calendar:calId, title, date,
+    endDate: endDate && endDate!==date ? endDate : undefined,
+    allDay:true, start:'00:00', end:'23:59',
+    desc: desc||'', color: color||'', recurrence:'none', recurrenceEnd:''
+  });
+  return true;
+}
+function usFederalHolidays2026(){
+  return [
+    ['New Year\'s Day','2026-01-01'],
+    ['Martin Luther King Jr. Day','2026-01-19'],
+    ['Washington\'s Birthday','2026-02-16'],
+    ['Memorial Day','2026-05-25'],
+    ['Juneteenth National Independence Day','2026-06-19'],
+    ['Independence Day','2026-07-04'],
+    ['Labor Day','2026-09-07'],
+    ['Columbus Day','2026-10-12'],
+    ['Veterans Day','2026-11-11'],
+    ['Thanksgiving Day','2026-11-26'],
+    ['Christmas Day','2026-12-25'],
+  ];
+}
+function importHolidays(){
+  ensureCalendar('holidays','Holidays','ev-red');
+  let added=0;
+  usFederalHolidays2026().forEach(([title,date])=>{
+    if (addImportedEvent('holidays', title, date, date, 'US Federal Holiday (2026)', 'ev-red')) added++;
+  });
+  saveAll(); renderCalList(); render();
+  alert(added+' holiday(s) imported into the Holidays calendar.'+(added<usFederalHolidays2026().length?' (some already existed and were skipped)':''));
+}
+function libertySchedule2026(){
+  return [
+    ['New Year\'s Day','96','2025-12-31','2026-01-05'],
+    ['Martin Luther King Jr. Day','96','2026-01-15','2026-01-20'],
+    ['Washington\'s Birthday','96','2026-02-13','2026-02-18'],
+    ['Spring Holiday','72','2026-04-02','2026-04-06'],
+    ['Memorial Day','96','2026-05-22','2026-05-27'],
+    ['Juneteenth National Independence Day','96','2026-06-17','2026-06-22'],
+    ['Independence Day','96','2026-07-02','2026-07-07'],
+    ['Labor Day','96','2026-09-04','2026-09-09'],
+    ['Columbus Day','96','2026-10-09','2026-10-14'],
+    ['Veterans\' Day','72','2026-11-10','2026-11-12'],
+    ['Thanksgiving Day','96','2026-11-25','2026-11-30'],
+    ['Christmas Day','96','2026-12-23','2026-12-28'],
+  ];
+}
+function importLiberty(){
+  ensureCalendar('liberty','Liberty Schedule','ev-green');
+  let added=0;
+  libertySchedule2026().forEach(([title,hours,begins,ends])=>{
+    const desc=`${hours} HR SPECIAL LIBERTY — Begins 1630 ${begins}, Ends 0730 ${ends}`;
+    if (addImportedEvent('liberty', title+' Liberty', begins, ends, desc, 'ev-green')) added++;
+  });
+  saveAll(); renderCalList(); render();
+  alert(added+' liberty period(s) imported into the Liberty Schedule calendar.'+(added<libertySchedule2026().length?' (some already existed and were skipped)':''));
+}
+
+// ---- DATA EXPORT / IMPORT ----
+function exportData(){
+  const payload = { version:2, exported:new Date().toISOString(), events, exceptions, calendars };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'chrono-events.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+function importDataFile(input){
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (!data || !Array.isArray(data.events)) { alert('Not a CHRONO export file.'); return; }
+      const have = new Set(events.map(e=>e.id));
+      let added=0;
+      (data.calendars||[]).forEach(c=>{ if (!calById(c.id)) calendars.push(c); });
+      data.events.forEach(e=>{ if (!have.has(e.id)) { events.push(e); added++; } });
+      if (data.exceptions && typeof data.exceptions==='object') {
+        Object.keys(data.exceptions).forEach(k=>{
+          exceptions[k] = Array.from(new Set([...(exceptions[k]||[]), ...data.exceptions[k]]));
+        });
+      }
+      saveAll(); renderCalList(); render();
+      alert(added+' event(s) imported.');
+    } catch(e) { alert('Import failed: '+e.message); }
+    input.value='';
+  };
+  r.readAsText(f);
+}
+
+// ---- SEED: workout schedule v2 + sleep ----
+(function seedWorkouts(){
+  events = events.filter(e => !(e.id||'').startsWith('seed-w-'));
+  const mk = (id,title,date,start,end,color,days,desc)=>({
+    id, title, date, allDay:false, start, end, desc:desc||'', color,
+    recurrence:'weekly', recurrenceEnd:'', weeklyDays:days
+  });
+  const addMin = function(t,m){ const p=t.split(':'); const tot=(+p[0])*60+(+p[1])+m; return String(Math.floor(tot/60)).padStart(2,'0')+':'+String(tot%60).padStart(2,'0'); };
+  const days = [
+    ['mon',1,'2026-11-02','Gym','Push Workout','Push day - see workout app for exercises','16:50'],
+    ['tue',2,'2026-11-03','Gym','Pull Workout','Pull day - see workout app for exercises','16:50'],
+    ['wed',3,'2026-11-04','Track','3-Mile Run','3-mile run - pace work toward sub-18:00','16:50'],
+    ['thu',4,'2026-11-05','Gym','Legs Workout','Legs day - after Field Day','17:30'],
+    ['fri',5,'2026-11-06','Gym','Upper Workout','Upper day - see workout app for exercises','16:50'],
+    ['sat',6,'2026-11-07','Track','Easy Run','Easy aerobic run','16:50'],
+  ];
+  const seeds = [];
+  days.forEach(function(d){
+    const k=d[0], wd=d[1], dt=d[2], dest=d[3], wo=d[4], desc=d[5], t0=d[6];
+    seeds.push(mk('seed-w-'+k+'-d1','Drive to '+dest, dt, t0,           addMin(t0,10),  'ev-yellow',[wd]));
+    seeds.push(mk('seed-w-'+k+'-wo',wo,              dt, addMin(t0,10), addMin(t0,80),  'ev-orange',[wd],desc));
+    seeds.push(mk('seed-w-'+k+'-d2','Drive to Barracks', dt, addMin(t0,80), addMin(t0,90),  'ev-yellow',[wd]));
+    seeds.push(mk('seed-w-'+k+'-hy','Hygiene & Changeover into Civvies',       dt, addMin(t0,90), addMin(t0,120), 'ev-pink',[wd]));
+  });
+  const allWk = [0,1,2,3,4,5,6];
+  const sleepEv = events.find(e => (e.id||'').startsWith('seed-sleep-'));
+  if (!sleepEv) {
+    seeds.push(mk('seed-sleep-night','Sleep','2026-11-01','21:30','05:30','ev-teal',allWk,'Sleep'));
+  } else if (sleepEv.start === '22:30' && sleepEv.end === '06:30') {
+    sleepEv.start = '21:30';
+    sleepEv.end   = '05:30';
+  }
+  events = events.concat(seeds);
+  localStorage.setItem('chrono_v2_events', JSON.stringify(events));
+})();
+
+// One-time: clear work-related occurrences during the Veterans' 72 (Nov 10-12, 2026).
+// Adds date exceptions to recurring events whose titles match the work block patterns,
+// so those blocks simply don't appear on those three days; the series resumes after.
+(function clearWorkDuring72(){
+  if (localStorage.getItem('chrono_v2_cleared72') === 'done') return;
+  const days72 = ['2026-11-10','2026-11-11','2026-11-12'];
+  const workRe = /platoon\s*pt|changeover\s+for\s+(work|pt)|^work$|lunch\s+chow/i;
+  let touched = false;
+  events.forEach(ev => {
+    if (!ev.recurrence || ev.recurrence === 'none') return;
+    if (!workRe.test((ev.title||'').trim())) return;
+    if (!exceptions[ev.id]) exceptions[ev.id] = [];
+    days72.forEach(ds => {
+      if (!exceptions[ev.id].includes(ds)) { exceptions[ev.id].push(ds); touched = true; }
+    });
+  });
+  // Also remove one-off (non-recurring) work events that fall on those days.
+  const before = events.length;
+  events = events.filter(ev => {
+    if (ev.recurrence && ev.recurrence !== 'none') return true;
+    if (!workRe.test((ev.title||'').trim())) return true;
+    return !(ev.date >= '2026-11-10' && ev.date <= '2026-11-12');
+  });
+  if (touched || events.length !== before) saveAll();
+  localStorage.setItem('chrono_v2_cleared72', 'done');
+})();
+
+renderCalList();
 render();
 </script>
 </body>
