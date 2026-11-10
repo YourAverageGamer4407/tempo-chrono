@@ -1,1 +1,3487 @@
-${file:C:\Users\bigga\AppData\Local\Temp\chrono_live.html}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CHRONO // CALENDAR</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#080c10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CHRONO">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080c10;
+  --surface:  #0d1117;
+  --surface2: #111820;
+  --border:   #1e2d3d;
+  --border2:  #243447;
+  --accent:   #7dd8f0;
+  --danger:   #f28b9a;
+  --ok:       #7dddb0;
+  --text:     #e6edf3;
+  --text2:    #8b949e;
+  --text3:    #3d5166;
+  --mono:     'JetBrains Mono', 'Courier New', monospace;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  height: 100vh; height: 100dvh; display: flex; flex-direction: column;
+  overflow: hidden; overflow-x: hidden; max-width: 100vw;
+}
+
+/* JARVIS 2026-11-09 — PHONE HORIZONTAL OVERFLOW FIX (7th day column off-screen).
+   The top bar alone needs ~420px at 412px viewport (logo + TODAY + arrows +
+   undo/redo + two selects + 5 view buttons), which widened the whole document
+   and pushed Sunday past the right edge. Let the bar wrap its overflow instead
+   of expanding the page, and keep every grid inside the viewport. */
+@media (max-width: 820px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: 52px; row-gap: 6px; padding: 6px 10px; }
+  .topbar > * { flex-shrink: 0; }
+  .current-label { min-width: 0; flex: 1 1 100%; order: 40; text-align: left; font-size: 12px; }
+  .week-view, .month-view, .day-view, .custom-view { max-width: 100vw; overflow-x: hidden; }
+  .week-header-row, .week-time-grid, .week-allday-row, .month-grid, .month-dow-header {
+    width: 100%; min-width: 0;
+  }
+  .week-header-row, .week-time-grid { grid-template-columns: 34px repeat(var(--ncols, 7), minmax(0, 1fr)); }
+  .week-allday-row { grid-template-columns: 34px repeat(var(--ncols, 7), minmax(0, 1fr)); }
+  .week-header-cell, .week-day-col { min-width: 0; }
+  .month-grid, .month-dow-header { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .punch-list { overflow-x: auto; }
+}
+
+/* TOPBAR (BUG-11: pads for the notch / status bar in standalone) */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; padding-top: env(safe-area-inset-top);
+  height: calc(52px + env(safe-area-inset-top)); flex-shrink: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.logo { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent); letter-spacing: 2px; white-space: nowrap; }
+.logo span { color: var(--text3); }
+.today-btn {
+  padding: 5px 14px; border: 1px solid var(--border2); border-radius: 3px;
+  cursor: pointer; font-size: 11px; font-family: var(--mono); letter-spacing: 1px;
+  background: transparent; color: var(--text2); transition: all .15s;
+}
+.today-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nav-btns { display: flex; gap: 2px; }
+.nav-btn {
+  width: 30px; height: 30px; border: none; background: none; cursor: pointer;
+  border-radius: 3px; font-size: 16px; color: var(--text2);
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.nav-btn:hover { background: var(--border); color: var(--accent); }
+.undo-btn:disabled { opacity: .3; cursor: default; }
+.undo-btn:disabled:hover { background: none; color: var(--text2); }
+.current-label { font-family: var(--mono); font-size: 13px; color: var(--text); min-width: 220px; letter-spacing: 1px; }
+.view-switcher { margin-left: auto; display: flex; border: 1px solid var(--border2); border-radius: 3px; overflow: hidden; }
+.view-btn {
+  padding: 6px 14px; border: none; background: transparent; cursor: pointer;
+  font-size: 10px; font-family: var(--mono); color: var(--text2); letter-spacing: 1px;
+  border-left: 1px solid var(--border2); transition: all .15s;
+}
+.view-btn:first-child { border-left: none; }
+.view-btn:hover { color: var(--accent); background: rgba(125,216,240,.05); }
+.view-btn.active { background: rgba(125,216,240,.12); color: var(--accent); }
+
+/* LAYOUT */
+.calendar-wrap { display: flex; flex: 1; overflow: hidden; }
+
+/* SIDEBAR */
+.sidebar {
+  width: 220px; padding: 14px 10px; background: var(--surface);
+  border-right: 1px solid var(--border); flex-shrink: 0; overflow-y: auto;
+}
+.new-event-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; margin: 0 4px 16px; width: calc(100% - 8px);
+  background: rgba(125,216,240,.08); border: 1px solid rgba(125,216,240,.3);
+  border-radius: 3px; cursor: pointer; font-size: 10px;
+  font-family: var(--mono); color: var(--accent); letter-spacing: 1px; transition: all .15s;
+}
+.new-event-btn:hover { background: rgba(125,216,240,.15); border-color: var(--accent); }
+.new-event-btn .plus { font-size: 15px; line-height: 1; }
+
+.mini-header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; margin-bottom: 6px; }
+.mini-month { font-family: var(--mono); font-size: 10px; color: var(--text2); letter-spacing: 1px; }
+.mini-nav { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 14px; padding: 2px 5px; border-radius: 2px; transition: all .15s; }
+.mini-nav:hover { color: var(--accent); }
+.mini-grid { width: 100%; border-collapse: collapse; }
+.mini-grid th { font-size: 9px; color: var(--text3); text-align: center; padding: 2px; font-family: var(--mono); }
+.mini-grid td { text-align: center; padding: 1px; cursor: pointer; font-size: 10px; color: var(--text2); }
+.mini-grid td span { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 2px; transition: all .12s; }
+.mini-grid td:hover span { background: var(--border); color: var(--text); }
+.mini-grid td.today span { background: rgba(125,216,240,.2); color: var(--accent); }
+.mini-grid td.selected span { background: rgba(125,216,240,.12); color: var(--accent); outline: 1px solid rgba(125,216,240,.4); }
+.mini-grid td.other-month { opacity: .3; }
+
+/* MAIN */
+.main-view { flex: 1; overflow: auto; background: var(--bg); }
+
+/* MONTH */
+.month-view { height: 100%; display: flex; flex-direction: column; }
+.month-dow-header { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.month-dow-header div { padding: 8px 10px; text-align: right; font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; }
+.month-grid { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: 1fr; border-left: 1px solid var(--border); }
+.month-cell { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 4px; min-height: 120px; cursor: pointer; position: relative; transition: background .1s; }
+.month-cell:hover { background: var(--surface2); }
+.month-cell.other-month .day-num { color: var(--text3); }
+.month-cell.today .day-num span { background: var(--accent); color: var(--bg); border-radius: 2px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; }
+.month-cell .duty-tag { position: absolute; left: 4px; top: 3px; font-family: var(--mono); font-size: 8px; letter-spacing: 1px; color: var(--text3); }
+.day-num { font-size: 10px; font-family: var(--mono); color: var(--text2); text-align: right; padding: 2px 4px 4px; }
+.month-event { background: #7dd8f0; color: #080c10; border-radius: 3px; padding: 2px 6px; font-size: 10px; margin: 1px 0; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-weight: 600; transition: opacity .1s; }
+.month-event:hover { opacity: .85; }
+.month-more { font-size: 9px; font-family: var(--mono); color: var(--text2); padding: 1px 6px; margin: 1px 0; cursor: pointer; letter-spacing: .5px; border-radius: 3px; }
+.month-more:hover { color: var(--accent); background: var(--border); }
+.month-event.ev-green  { background: #7dddb0; color: #080c10; }
+.month-event.ev-red    { background: #f28b9a; color: #fff; }
+.month-event.ev-yellow { background: #f5d57a; color: #080c10; }
+.month-event.ev-purple { background: #c4b0f7; color: #080c10; }
+.month-event.ev-teal   { background: #a8b8e8; color: #080c10; }
+.month-event.ev-orange { background: #f5b07a; color: #080c10; }
+.month-event.ev-lime   { background: #d8f07a; color: #080c10; }
+.month-event.ev-pink   { background: #f7c8e0; color: #080c10; }
+.month-payday { display: flex; align-items: center; gap: 4px; background: transparent; border: 1px solid var(--ok); color: var(--ok); border-radius: 3px; padding: 1px 5px; font-size: 9px; font-family: var(--mono); letter-spacing: 1px; margin: 1px 0; cursor: pointer; }
+.month-payday:hover { background: rgba(125,221,176,.12); }
+
+/* WEEK */
+.week-view { display: flex; flex-direction: column; height: 100%; }
+.week-header-row { display: grid; grid-template-columns: 56px repeat(var(--ncols, 7), minmax(0, 1fr)); border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+.week-header-cell { text-align: center; padding: 8px 4px; border-left: 1px solid var(--border); }
+.week-header-cell .dow { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; }
+.week-header-cell .wdate { font-size: 20px; font-weight: 300; color: var(--text2); line-height: 1.4; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 3px; cursor: pointer; font-family: var(--mono); transition: all .12s; }
+.week-header-cell .wdate:hover { background: var(--border); color: var(--text); }
+.week-header-cell.today .wdate { background: rgba(125,216,240,.15); color: var(--accent); outline: 1px solid rgba(125,216,240,.4); }
+.week-header-cell .duty-mode { font-family: var(--mono); font-size: 8px; letter-spacing: 1px; color: var(--accent); }
+.week-time-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 56px repeat(var(--ncols, 7), minmax(0, 1fr)); position: relative; }
+.time-labels { display: flex; flex-direction: column; }
+.time-label { height: var(--hh, 64px); display: flex; align-items: flex-start; justify-content: flex-end; padding-right: 8px; font-size: 9px; color: var(--text3); font-family: var(--mono); flex-shrink: 0; padding-top: 3px; }
+.week-day-col { border-left: 1px solid var(--border); position: relative; cursor: pointer; }
+.hour-line { height: var(--hh, 64px); border-bottom: 1px solid rgba(30,45,61,.7); }
+.week-event { position: absolute; left: 2px; right: 2px; border-left: none; background: #7dd8f0; color: #080c10; border-radius: 3px; padding: 2px 4px; font-size: 10px; cursor: pointer; overflow: hidden; z-index: 1; font-family: var(--mono); font-weight: 600; transition: opacity .1s; }
+.week-event { border-top: 1px solid rgba(0,0,0,.35); border-right: 1px solid rgba(0,0,0,.35); border-bottom: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 2px rgba(0,0,0,.4); display: flex; flex-direction: column; }
+.week-event .ev-time { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.week-event .ev-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.week-event:hover { opacity: .85; }
+.week-event.ev-green  { background: #7dddb0; color: #080c10; }
+.week-event.ev-red    { background: #f28b9a; color: #fff; }
+.week-event.ev-yellow { background: #f5d57a; color: #080c10; }
+.week-event.ev-purple { background: #c4b0f7; color: #080c10; }
+.week-event.ev-teal   { background: #a8b8e8; color: #080c10; }
+.week-event.ev-orange { background: #f5b07a; color: #080c10; }
+.week-event.ev-lime   { background: #d8f07a; color: #080c10; }
+.week-event.ev-pink   { background: #f7c8e0; color: #080c10; }
+.now-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--danger); z-index: 2; opacity: .8; }
+.now-line::before { content: ''; position: absolute; left: -4px; top: -4px; width: 7px; height: 7px; background: var(--danger); border-radius: 50%; }
+
+/* ALL-DAY STRIP — where the holiday layer and any all-day event is shown */
+.week-allday-row { display: grid; grid-template-columns: 56px repeat(var(--ncols, 7), minmax(0, 1fr)); border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.week-allday-row > div { border-left: 1px solid var(--border); min-height: 4px; padding: 2px 3px; }
+/* The DAY view has one column; keep its gutter identical to .day-time-grid. */
+.week-allday-row.allday-single { grid-template-columns: 56px 1fr; }
+.allday-strip { display: flex; flex-direction: column; gap: 2px; }
+.allday-chip { font-family: var(--mono); font-size: 9px; font-weight: 600; border-radius: 3px; padding: 2px 5px; cursor: pointer; background: #7dd8f0; color: #080c10; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.allday-chip:hover { opacity: .85; }
+.allday-chip.ev-green  { background: #7dddb0; }
+.allday-chip.ev-red    { background: #f28b9a; color: #fff; }
+.allday-chip.ev-yellow { background: #f5d57a; }
+.allday-chip.ev-purple { background: #c4b0f7; }
+.allday-chip.ev-teal   { background: #a8b8e8; }
+.allday-chip.ev-orange { background: #f5b07a; }
+.allday-chip.ev-lime   { background: #d8f07a; }
+.allday-chip.ev-pink   { background: #f7c8e0; }
+
+/* DAY */
+.day-view { display: flex; flex-direction: column; height: 100%; }
+.day-header { text-align: center; padding: 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+.day-header .dow { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 2px; }
+.day-header .ddate { font-size: 32px; font-weight: 300; color: var(--text2); line-height: 1.2; display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 4px; font-family: var(--mono); }
+.day-header.today .ddate { background: rgba(125,216,240,.12); color: var(--accent); outline: 1px solid rgba(125,216,240,.3); }
+.day-time-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 56px 1fr; position: relative; }
+.day-col { border-left: 1px solid var(--border); position: relative; cursor: pointer; }
+.day-event { position: absolute; left: 4px; right: 4px; border-left: none; background: #7dd8f0; color: #080c10; border-radius: 3px; padding: 4px 8px; font-size: 11px; cursor: pointer; overflow: hidden; z-index: 1; font-family: var(--mono); font-weight: 600; transition: opacity .1s; }
+.day-event { border-top: 1px solid rgba(0,0,0,.35); border-right: 1px solid rgba(0,0,0,.35); border-bottom: 1px solid rgba(0,0,0,.35); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.day-event:hover { opacity: .85; }
+.day-event.ev-green  { background: #7dddb0; color: #080c10; }
+.day-event.ev-red    { background: #f28b9a; color: #fff; }
+.day-event.ev-yellow { background: #f5d57a; color: #080c10; }
+.day-event.ev-purple { background: #c4b0f7; color: #080c10; }
+.day-event.ev-teal   { background: #a8b8e8; color: #080c10; }
+.day-event.ev-orange { background: #f5b07a; color: #080c10; }
+.day-event.ev-lime   { background: #d8f07a; color: #080c10; }
+.day-event.ev-pink   { background: #f7c8e0; color: #080c10; }
+
+/* MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; width: 500px; max-width: 95vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.8); }
+.modal-header { display: flex; align-items: center; padding: 14px 20px 12px; gap: 10px; border-bottom: 1px solid var(--border); }
+.modal-header h3 { font-size: 12px; font-weight: 500; font-family: var(--mono); color: var(--accent); letter-spacing: 1px; flex: 1; }
+.modal-close { background: none; border: none; cursor: pointer; font-size: 15px; color: var(--text3); padding: 4px 8px; border-radius: 2px; transition: all .12s; }
+.modal-close:hover { color: var(--danger); }
+.modal-body { padding: 16px 20px; }
+.form-row { margin-bottom: 13px; }
+.form-row label { display: block; font-size: 9px; color: var(--text3); margin-bottom: 5px; font-family: var(--mono); letter-spacing: 1px; }
+.form-row input, .form-row textarea, .form-row select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 3px; font-size: 12px; color: var(--text); background: var(--bg); outline: none; font-family: var(--mono); transition: border-color .15s; }
+.form-row input:focus, .form-row textarea:focus, .form-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(125,216,240,.08); }
+.form-row textarea { resize: vertical; min-height: 54px; }
+.form-row select option { background: var(--surface2); }
+.form-row-inline { display: flex; gap: 12px; }
+.form-row-inline .form-row { flex: 1; }
+
+.recur-section { margin-bottom: 13px; }
+.recur-section > label { display: block; font-size: 9px; color: var(--text3); margin-bottom: 6px; font-family: var(--mono); letter-spacing: 1px; }
+.recur-opts { display: flex; gap: 5px; flex-wrap: wrap; }
+.recur-opt { padding: 5px 11px; border: 1px solid var(--border); border-radius: 2px; font-size: 10px; font-family: var(--mono); color: var(--text2); cursor: pointer; transition: all .12s; background: transparent; letter-spacing: .5px; }
+.recur-opt:hover { border-color: var(--border2); color: var(--text); }
+.recur-opt.active { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+.recur-end-row { margin-top: 8px; display: none; }
+.recur-end-row.show { display: block; }
+
+.weekly-days-row { margin-top: 8px; display: none; }
+.weekly-days-row.show { display: block; }
+.weekly-days-row > label { display: block; font-size: 9px; color: var(--text3); margin-bottom: 6px; font-family: var(--mono); letter-spacing: 1px; }
+.weekly-day-btns { display: flex; gap: 5px; }
+.weekly-day-btn { flex: 1; padding: 6px 2px; border: 1px solid var(--border); border-radius: 2px; font-size: 9px; font-family: var(--mono); color: var(--text2); cursor: pointer; background: transparent; letter-spacing: .5px; transition: all .12s; text-align: center; }
+.weekly-day-btn:hover { border-color: var(--border2); color: var(--text); }
+.weekly-day-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+
+.category-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+.cat-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 11px; border: 1px solid var(--border); border-radius: 2px;
+  font-size: 9px; font-family: var(--mono); letter-spacing: 1px;
+  color: var(--text2); background: transparent; cursor: pointer; transition: all .12s;
+}
+.cat-btn:hover { border-color: var(--border2); color: var(--text); }
+.cat-btn.active { color: #fff; }
+.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legend { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.legend-title { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; margin-bottom: 8px; padding: 0 4px; }
+.legend-item { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 10px; font-family: var(--mono); color: var(--text2); }
+.legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 20px 14px; border-top: 1px solid var(--border); }
+.btn { padding: 7px 16px; border-radius: 3px; font-size: 10px; cursor: pointer; font-weight: 500; border: none; font-family: var(--mono); letter-spacing: 1px; transition: all .15s; }
+.btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+.btn-ghost:hover { border-color: var(--border2); color: var(--text); }
+.btn-primary { background: rgba(125,216,240,.12); color: var(--accent); border: 1px solid rgba(125,216,240,.4); }
+.btn-primary:hover { background: rgba(125,216,240,.22); border-color: var(--accent); }
+.btn-danger { background: rgba(242,139,154,.1); color: var(--danger); border: 1px solid rgba(242,139,154,.35); }
+.btn-danger:hover { background: rgba(242,139,154,.2); }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* RECUR DIALOG */
+.recur-dialog { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); backdrop-filter: blur(4px); z-index: 110; align-items: center; justify-content: center; }
+.recur-dialog.open { display: flex; }
+.recur-box { background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; padding: 24px; width: 340px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,.9); }
+.recur-box h4 { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 1px; margin-bottom: 16px; }
+.recur-choices { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.recur-choices label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 11px; color: var(--text2); font-family: var(--mono); padding: 8px 10px; border: 1px solid var(--border); border-radius: 3px; transition: all .12s; }
+.recur-choices label:hover { border-color: var(--border2); color: var(--text); }
+.recur-choices input[type=radio] { accent-color: var(--accent); }
+.recur-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* DETAIL (BUG-4: max-height + scroll so the MOVE controls are always reachable) */
+.detail-popup { display: none; position: fixed; z-index: 90; background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; box-shadow: 0 8px 40px rgba(0,0,0,.8); width: 270px; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.detail-popup.open { display: block; }
+.detail-sheet-handle { display: none; }
+.detail-top { padding: 8px 10px; display: flex; justify-content: flex-end; gap: 4px; border-bottom: 1px solid var(--border); }
+.detail-top button { background: none; border: none; cursor: pointer; color: var(--text3); padding: 4px 7px; border-radius: 2px; font-size: 12px; transition: all .12s; }
+.detail-top button:hover { color: var(--accent); background: var(--border); }
+.detail-top button.del:hover { color: var(--danger); }
+.detail-body { padding: 12px 14px 14px; }
+.detail-title { font-size: 14px; font-weight: 500; margin-bottom: 7px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.detail-color-bar { width: 3px; height: 16px; border-radius: 1px; flex-shrink: 0; }
+.detail-time { font-size: 10px; color: var(--text2); margin-bottom: 3px; font-family: var(--mono); }
+.detail-recur { font-size: 10px; color: var(--accent); font-family: var(--mono); margin-bottom: 3px; }
+.detail-cal { font-size: 9px; font-family: var(--mono); letter-spacing: 1px; margin-bottom: 3px; opacity: .75; display: flex; align-items: center; gap: 6px; }
+.detail-desc { font-size: 10px; color: var(--text3); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* CUSTOM DAY PICKER */
+.custom-day-grid { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.custom-day-btn {
+  flex: 1; min-width: 44px; padding: 10px 4px; border: 1px solid var(--border);
+  border-radius: 3px; background: transparent; color: var(--text2);
+  font-size: 10px; font-family: var(--mono); letter-spacing: 1px; cursor: pointer;
+  transition: all .15s;
+}
+.custom-day-btn:hover { border-color: var(--border2); color: var(--text); }
+.custom-day-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.1); }
+.custom-presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.preset-label { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ============================================================
+   v3 CARRIED FORWARD — responsive shell, mobile navigation, banner
+   (visual language unchanged: same palette, same mono/Inter type)
+   ============================================================ */
+
+/* MOBILE SHELL (hidden on desktop, shown <=820px) */
+.mobile-nav { display: none; }
+.sidebar-backdrop { display: none; }
+
+/* STORAGE BANNER */
+.storage-banner {
+  display: none; align-items: center; gap: 12px; flex-shrink: 0;
+  padding: 8px 16px; background: rgba(242,139,154,.12);
+  border-bottom: 1px solid rgba(242,139,154,.45);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .5px; color: var(--danger);
+  flex-wrap: wrap;
+}
+.storage-banner.open { display: flex; }
+.storage-banner .storage-actions { display: flex; gap: 8px; margin-left: auto; }
+.sidebar-backdrop {
+  display: none; position: absolute; inset: 0; z-index: 39;
+  background: rgba(0,0,0,.55);
+}
+
+/* FIRST-RUN HINT */
+.first-run-hint {
+  display: none; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 6px 16px; background: rgba(125,216,240,.07);
+  border-bottom: 1px solid rgba(125,216,240,.25);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .5px; color: var(--accent);
+}
+.first-run-hint.open { display: flex; }
+.first-run-hint button { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; margin-left: auto; }
+
+/* MOVE CONTROLS in the detail popup */
+.detail-move { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.detail-move-label { font-size: 9px; color: var(--text3); font-family: var(--mono); letter-spacing: 1px; margin-bottom: 6px; }
+.move-shift-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.move-shift {
+  flex: 1; min-width: 44px; min-height: 44px; padding: 5px 2px; background: transparent;
+  border: 1px solid var(--border); border-radius: 2px; cursor: pointer;
+  font-family: var(--mono); font-size: 9px; color: var(--text2); letter-spacing: .5px;
+  transition: all .12s; text-align: center;
+}
+.move-shift:hover { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+.move-shift.wide { flex: 1 1 100%; min-height: 40px; }
+.move-edit-btn {
+  width: 100%; margin-top: 6px; padding: 9px 8px; background: rgba(125,216,240,.08);
+  border: 1px solid rgba(125,216,240,.3); border-radius: 3px; cursor: pointer;
+  font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: 1px;
+}
+.move-edit-btn:hover { background: rgba(125,216,240,.18); border-color: var(--accent); }
+
+/* BACKUP ROW in the sidebar */
+.backup-row { display: flex; gap: 6px; margin: 14px 4px 0; }
+.backup-btn {
+  flex: 1; padding: 7px 4px; background: transparent; border: 1px solid var(--border);
+  border-radius: 3px; cursor: pointer; font-family: var(--mono); font-size: 9px;
+  color: var(--text2); letter-spacing: 1px; transition: all .15s;
+}
+.backup-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+.backup-btn.cal {
+  flex: 1 1 100%; border-color: rgba(125,216,240,.3); color: var(--accent);
+  background: rgba(125,216,240,.06);
+}
+.backup-btn.cal:hover { background: rgba(125,216,240,.16); }
+
+/* NO-BACKUP NUDGE (MEM-0) */
+.backup-nudge {
+  display: none; align-items: center; gap: 8px; margin: 10px 4px 0;
+  padding: 7px 9px; border: 1px solid rgba(227,196,107,.45); border-radius: 3px;
+  background: rgba(227,196,107,.1); font-family: var(--mono); font-size: 9px;
+  letter-spacing: .5px; color: #e3c46b; cursor: pointer;
+}
+.backup-nudge.open { display: flex; }
+.backup-nudge button { background: none; border: none; color: #e3c46b; cursor: pointer; font-size: 12px; margin-left: auto; }
+
+/* ============================================================
+   v4 ADDITIONS — calendar stripe/chips/manager, holiday style,
+   punch list, link rows. Same palette; nothing recoloured.
+   ============================================================ */
+.cal-stripe { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 2px 0 0 2px; }
+.week-event, .day-event { padding-left: 6px; }
+.hol-event { background: #f28b9a; color: #fff; }
+.cal-chip-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 16px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.cal-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px;
+  border: 1px solid var(--border); border-radius: 2px; background: transparent;
+  font-family: var(--mono); font-size: 9px; letter-spacing: .5px; color: var(--text3);
+  cursor: pointer; transition: all .12s; white-space: nowrap;
+}
+.cal-chip:hover { border-color: var(--border2); color: var(--text2); }
+.cal-chip.on { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+.cal-chip .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.cal-chip .eye { opacity: .55; font-size: 10px; }
+.cal-chip.mgr { border-style: dashed; }
+
+.cal-legend-item { display: flex; align-items: center; gap: 8px; padding: 4px; font-size: 10px; font-family: var(--mono); color: var(--text2); cursor: pointer; border-radius: 2px; }
+.cal-legend-item:hover { background: var(--border); }
+.cal-legend-item.hidden-cal { opacity: .42; }
+.cal-legend-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-legend-eye { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 11px; padding: 2px 3px; }
+.cal-legend-eye:hover { color: var(--accent); }
+
+.cal-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.cal-row-input { flex: 1 1 130px; min-width: 110px; }
+.cal-handle { cursor: grab; color: var(--text3); font-size: 12px; letter-spacing: -2px; }
+.cal-row-btn { background: none; border: 1px solid var(--border); border-radius: 2px; cursor: pointer; color: var(--text2); font-size: 11px; padding: 5px 7px; font-family: var(--mono); transition: all .12s; }
+.cal-row-btn:hover { border-color: var(--accent); color: var(--accent); }
+.cal-row-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.cal-row-btn:disabled { opacity: .3; cursor: not-allowed; }
+.cal-row-btn:disabled:hover { border-color: var(--border); color: var(--text2); }
+.cal-sub { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: .5px; margin: 10px 4px 4px; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.swatch { width: 24px; height: 24px; border-radius: 3px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.swatch.active { border-color: var(--text); }
+.mode-toggle { display: flex; gap: 6px; }
+.mode-btn { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 2px; background: transparent; cursor: pointer; font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--text2); }
+.mode-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+
+.import-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.import-tab { flex: 1; padding: 8px 6px; border: 1px solid var(--border); background: transparent; cursor: pointer; border-radius: 2px; font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--text2); }
+.import-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(125,216,240,.08); }
+.import-pane { display: none; }
+.import-pane.active { display: block; }
+.paste-area { width: 100%; min-height: 150px; padding: 10px; border: 1px solid var(--border); border-radius: 3px; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 10px; resize: vertical; outline: none; }
+.paste-area:focus { border-color: var(--accent); }
+.import-report { font-family: var(--mono); font-size: 10px; color: var(--ok); margin-top: 10px; letter-spacing: .5px; }
+.import-report.warn { color: #e3c46b; }
+
+/* PUNCH LIST (H-5 countdown ticker) */
+.punch-list { display: flex; align-items: center; gap: 10px; padding: 5px 16px; background: var(--surface); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--text3); flex-shrink: 0; overflow-x: auto; }
+.punch-item { display: inline-flex; align-items: baseline; gap: 5px; color: var(--text2); white-space: nowrap; }
+.punch-item b { color: var(--accent); font-weight: 500; }
+.punch-x { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 10px; padding: 0 2px; }
+.punch-x:hover { color: var(--danger); }
+
+/* FILTERED banner in STATS (CAL-3) */
+.filter-banner { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: #e3c46b; background: rgba(227,196,107,.1); border: 1px solid rgba(227,196,107,.4); border-radius: 3px; padding: 7px 10px; margin-bottom: 14px; display: inline-block; }
+
+/* ============================================================
+   RESPONSIVE — nothing off-screen at phone width.
+   The desktop layout above is untouched; these rules only engage
+   below 820px (tablet portrait / phone).
+   ============================================================ */
+@media (max-width: 820px) {
+  /* --- topbar: wrap into two compact rows, no horizontal overflow --- */
+  .topbar {
+    height: auto; padding: 8px 10px; gap: 8px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+    flex-wrap: wrap; align-items: center;
+  }
+  .logo { font-size: 12px; letter-spacing: 1px; }
+  .current-label {
+    order: 3; width: 100%; min-width: 0; font-size: 12px;
+    text-align: center; padding-top: 2px;
+  }
+  .view-switcher { margin-left: auto; }
+  .view-btn { padding: 6px 9px; font-size: 9px; letter-spacing: .5px; }
+  .today-btn { padding: 5px 10px; font-size: 10px; }
+  /* keeps the two selects + undo/redo reachable but compact */
+  #timeFmt, #hourZoom { font-size: 9px !important; padding: 5px 6px !important; margin-left: 4px !important; }
+
+  /* --- sidebar: slide-in drawer instead of a 220px column --- */
+  .calendar-wrap { position: relative; }
+  .sidebar {
+    position: absolute; top: 0; bottom: 0; left: 0; z-index: 40;
+    width: 232px; max-width: 78vw;
+    transform: translateX(-100%); transition: transform .22s ease;
+    box-shadow: 6px 0 30px rgba(0,0,0,.6);
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop.open { display: block; }
+
+  /* --- bottom tab bar: one-handed view switching --- */
+  .mobile-nav {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    flex-shrink: 0; background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .mobile-nav button {
+    background: none; border: none; cursor: pointer; padding: 9px 2px 10px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 1px;
+    color: var(--text3); display: flex; flex-direction: column;
+    align-items: center; gap: 3px; transition: color .15s;
+  }
+  .mobile-nav button .mi { font-size: 15px; line-height: 1; }
+  .mobile-nav button.active { color: var(--accent); }
+
+  /* --- time grid: narrower gutter so day columns stay usable --- */
+  .week-header-row, .week-time-grid { grid-template-columns: 34px repeat(var(--ncols, 7), minmax(0, 1fr)); }
+  .time-label { padding-right: 4px; font-size: 8px; }
+  .week-header-cell { padding: 6px 1px; }
+  .week-header-cell .dow { font-size: 8px; letter-spacing: 0; }
+  .week-header-cell .wdate { font-size: 16px; width: 30px; height: 30px; }
+  .day-time-grid { grid-template-columns: 34px 1fr; }
+  .week-allday-row.allday-single { grid-template-columns: 34px 1fr; }
+  .week-event, .day-event { font-size: 9px; padding: 2px 3px 2px 6px; }
+
+  /* --- month view: chips stay inside the cell --- */
+  .month-cell { min-height: 74px; padding: 2px; }
+  .month-dow-header div { padding: 6px 4px; font-size: 8px; }
+  .day-num { font-size: 9px; }
+  .month-event { font-size: 9px; padding: 1px 4px; }
+
+  /* --- modals: full-width sheets that fit the viewport --- */
+  .modal { width: 100%; max-width: 100%; max-height: 100%; border-radius: 0; border: none; }
+  .modal-overlay { align-items: flex-start; }
+  .modal-body { padding: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .modal-footer { flex-wrap: wrap; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .form-row-inline { flex-direction: column; gap: 0; }
+
+  /* --- BUG-4: the detail popup becomes a bottom sheet with a
+         drag-to-dismiss handle, and it scrolls. Never clipped. --- */
+  .detail-popup {
+    left: 0 !important; right: 0; top: auto !important;
+    bottom: 0; width: auto !important; max-width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+    border-radius: 10px 10px 0 0;
+    border-left: none; border-right: none; border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .detail-sheet-handle { display: block; width: 100%; padding: 8px 0 2px; background: none; border: none; cursor: pointer; text-align: center; }
+  .detail-sheet-handle i { display: inline-block; width: 42px; height: 4px; border-radius: 2px; background: var(--border2); }
+  .detail-top { border-bottom: none; padding-bottom: 2px; }
+  .detail-top button { min-width: 44px; min-height: 44px; font-size: 14px; }
+  .cal-chip-row { padding: 6px 10px; }
+  .punch-list { padding: 5px 10px; }
+}
+
+/* Very narrow phones (~320-360px): shrink the chrome further */
+@media (max-width: 400px) {
+  .view-btn { padding: 6px 7px; font-size: 8px; }
+  .logo { font-size: 11px; }
+  .week-header-row, .week-time-grid { grid-template-columns: 28px repeat(var(--ncols, 7), minmax(0, 1fr)); }
+  .day-time-grid { grid-template-columns: 28px 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">CHRONO<span> //</span></div>
+  <button class="nav-btn" id="btnSidebar" onclick="toggleSidebar()" title="Menu" style="display:none">&#9776;</button>
+  <button class="today-btn" onclick="goToday()">TODAY</button>
+  <div class="nav-btns">
+    <button class="nav-btn" onclick="navPrev()">&#8249;</button>
+    <button class="nav-btn" onclick="navNext()">&#8250;</button>
+  </div>
+  <div class="nav-btns" style="margin-left:6px;border-left:1px solid var(--border2);padding-left:6px">
+    <button class="nav-btn undo-btn" id="btnUndo" onclick="doUndo()" title="Undo (Ctrl+Z)">&#8630;</button>
+    <button class="nav-btn undo-btn" id="btnRedo" onclick="doRedo()" title="Redo (Ctrl+Y)">&#8631;</button>
+  </div>
+  <select id="timeFmt" onchange="setTimeFmt(this.value)" title="Time format" style="margin-left:8px;background:var(--surface2);color:var(--text2);border:1px solid var(--border2);border-radius:3px;font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:5px 8px;cursor:pointer"><option value="12">12H</option><option value="24">24H</option></select>
+  <select id="hourZoom" onchange="setHourZoom(this.value)" title="Time grid height" style="margin-left:8px;background:var(--surface2);color:var(--text2);border:1px solid var(--border2);border-radius:3px;font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:5px 8px;cursor:pointer">
+    <option value="auto">AUTO</option>
+    <option value="48">COMPACT</option>
+    <option value="64">NORMAL</option>
+    <option value="80">TALL</option>
+    <option value="160">XL</option>
+  </select>
+  <button class="today-btn" onclick="openCalendarManager()" title="Calendars">CALENDARS</button>
+  <div class="current-label" id="currentLabel"></div>
+  <div class="view-switcher">
+    <button class="view-btn" id="btn-day"    onclick="setView('day')">DAY</button>
+    <button class="view-btn active" id="btn-week"   onclick="setView('week')">WEEK</button>
+    <button class="view-btn" id="btn-month"  onclick="setView('month')">MONTH</button>
+    <button class="view-btn" id="btn-custom" onclick="setView('custom')">CUSTOM</button>
+    <button class="view-btn" id="btn-stats" onclick="setView('stats')">STATS</button>
+    <button class="view-btn" id="btn-custom-cfg" onclick="openCustomCfg()" title="Configure days" style="padding:6px 10px;border-left:1px solid var(--border2)">&#9881;</button>
+  </div>
+</div>
+
+<!-- CALENDAR FILTER CHIPS (§A.7) -->
+<div class="cal-chip-row" id="calChipRow"></div>
+
+<!-- PUNCH LIST — live countdowns (H-5) -->
+<div class="punch-list" id="punchList"></div>
+
+<!-- STORAGE RECOVERY BANNER (failure path: corrupt localStorage) -->
+<div class="storage-banner" id="storageBanner">
+  <span>STORAGE WAS UNREADABLE — YOUR SAVED EVENTS COULD NOT BE LOADED.</span>
+  <div class="storage-actions">
+    <button class="btn btn-ghost" onclick="restoreBackupFile()">RESTORE FROM BACKUP</button>
+    <button class="btn btn-ghost" onclick="startFresh()">START FRESH</button>
+  </div>
+</div>
+
+<!-- FIRST-RUN HINT -->
+<div class="first-run-hint" id="firstRunHint">
+  <span>TAP ANY DAY TO ADD AN EVENT — CALENDARS AND HOLIDAYS ARE IN THE SIDEBAR.</span>
+  <button onclick="dismissHint()" title="Dismiss">&#x2715;</button>
+</div>
+
+<div class="calendar-wrap" id="calWrap">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar(false)"></div>
+  <div class="sidebar" id="sidebar">
+    <button class="new-event-btn" onclick="openNewEvent()"><span class="plus">+</span> NEW EVENT</button>
+    <div id="miniCal"></div>
+
+    <div class="legend">
+      <div class="legend-title">// CALENDARS</div>
+      <div id="calLegend"></div>
+      <button class="backup-btn cal" style="margin:6px 0 0" onclick="openCalendarManager()">&#9881; MANAGE CALENDARS</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-title">// CATEGORIES &amp; DUTY DAYS</div>
+      <div id="catLegend"></div>
+      <div class="cal-sub">CLICK A CATEGORY ROW TO CYCLE THAT WEEKDAY'S DUTY MODE</div>
+    </div>
+
+    <div class="backup-row">
+      <button class="backup-btn" onclick="exportBackup()" title="Download all events as a .json file">EXPORT</button>
+      <button class="backup-btn" onclick="openPlainImport()" title="Load events from a .json backup or pasted data">IMPORT</button>
+      <button class="backup-btn cal" onclick="openWeekTemplateMenu()" title="Save this week as a template, or stamp a saved one onto it">&#128203; WEEK TEMPLATES</button>
+    </div>
+    <div class="backup-nudge" id="backupNudge" onclick="exportBackup()">
+      <span>NO BACKUP IN 30 DAYS — EXPORT</span>
+      <button onclick="dismissBackupNudge(event)" title="Dismiss">&#x2715;</button>
+    </div>
+  </div>
+  <div class="main-view" id="mainView"></div>
+</div>
+
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-nav" id="mobileNav">
+  <button id="mnav-month" onclick="setView('month')"><span class="mi">&#9638;</span>MONTH</button>
+  <button id="mnav-week"  onclick="setView('week')"><span class="mi">&#9635;</span>WEEK</button>
+  <button id="mnav-day"   onclick="setView('day')"><span class="mi">&#9636;</span>DAY</button>
+  <button id="mnav-stats" onclick="setView('stats')"><span class="mi">&#9681;</span>STATS</button>
+  <button id="mnav-menu"  onclick="toggleSidebar()"><span class="mi">&#9776;</span>MENU</button>
+</div>
+
+<!-- CUSTOM VIEW CONFIG MODAL -->
+<div class="modal-overlay" id="customCfgOverlay" onclick="closeCustomCfgOverlay(event)">
+  <div class="modal" style="width:380px">
+    <div class="modal-header">
+      <h3>// CUSTOM VIEW — SELECT DAYS</h3>
+      <button class="modal-close" onclick="closeCustomCfg()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label>CHOOSE WHICH DAYS TO DISPLAY</label></div>
+      <div class="custom-day-grid" id="customDayGrid">
+        <button class="custom-day-btn" data-d="0">SUN</button>
+        <button class="custom-day-btn" data-d="1">MON</button>
+        <button class="custom-day-btn" data-d="2">TUE</button>
+        <button class="custom-day-btn" data-d="3">WED</button>
+        <button class="custom-day-btn" data-d="4">THU</button>
+        <button class="custom-day-btn" data-d="5">FRI</button>
+        <button class="custom-day-btn" data-d="6">SAT</button>
+      </div>
+      <div class="custom-presets">
+        <span class="preset-label">PRESETS:</span>
+        <button class="btn btn-ghost" style="font-size:9px;padding:4px 10px" onclick="applyPreset([1,2,3,4,5])">MON-FRI</button>
+        <button class="btn btn-ghost" style="font-size:9px;padding:4px 10px" onclick="applyPreset([1,2,3,4,5,6])">MON-SAT</button>
+        <button class="btn btn-ghost" style="font-size:9px;padding:4px 10px" onclick="applyPreset([0,1,2,3,4,5,6])">ALL</button>
+        <button class="btn btn-ghost" style="font-size:9px;padding:4px 10px" onclick="applyPreset([0,6])">WEEKENDS</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCustomCfg()">CANCEL</button>
+      <button class="btn btn-primary" onclick="saveCustomCfg()">APPLY</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDARS MANAGER (§A.9) -->
+<div class="modal-overlay" id="calMgrOverlay" onclick="closeCalMgrOverlay(event)">
+  <div class="modal" style="width:460px">
+    <div class="modal-header">
+      <h3>// CALENDARS</h3>
+      <button class="modal-close" onclick="closeCalendarManager()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="calMgrList"></div>
+      <div class="cal-sub">NEW CALENDAR</div>
+      <div class="cal-row" id="newCalRow">
+        <input class="cal-row-input form-row" style="margin:0;padding:7px 10px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:11px;outline:none" id="newCalName" placeholder="Calendar name" maxlength="40" />
+        <div class="swatches" id="newCalSwatches"></div>
+        <div class="mode-toggle" style="margin-top:6px">
+          <button class="mode-btn active" id="newCalModeCat" onclick="setNewCalMode('category')">COLOUR BY CATEGORY</button>
+          <button class="mode-btn" id="newCalModeCal" onclick="setNewCalMode('calendar')">COLOUR BY CALENDAR</button>
+        </div>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="createCalendar()">+ CREATE CALENDAR</button>
+      </div>
+      <div class="cal-sub">SAFETY</div>
+      <div class="cal-row">
+        <button class="btn btn-ghost" onclick="restorePreMigrationSnapshot()">RESTORE PRE-MIGRATION SNAPSHOT</button>
+        <button class="btn btn-ghost" onclick="openImportDialog()">IMPORT INTO CHRONO</button>
+      </div>
+      <div id="calMgrNote" class="cal-sub"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCalendarManager()">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR DELETE DIALOG (three-way, nothing preselected) -->
+<div class="recur-dialog" id="deleteCalDialog">
+  <div class="recur-box" style="width:420px">
+    <h4>// DELETE CALENDAR</h4>
+    <div id="deleteCalText" style="font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.6;margin-bottom:16px"></div>
+    <div id="deleteCalChoices"></div>
+    <div class="recur-actions">
+      <button class="btn btn-ghost" onclick="cancelDeleteCalendar()">CANCEL</button>
+      <button class="btn btn-danger" id="deleteCalConfirmBtn" onclick="confirmDeleteCalendar()" disabled>CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT DIALOG (file tab + PASTE IMPORT tab, §A.8 / R-1) -->
+<div class="modal-overlay" id="importOverlay" onclick="closeImportOverlay(event)">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <h3>// IMPORT</h3>
+      <button class="modal-close" onclick="closeImportDialog()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="import-tabs">
+        <button class="import-tab active" id="importTabFile" onclick="setImportTab('file')">FROM FILE</button>
+        <button class="import-tab" id="importTabPaste" onclick="setImportTab('paste')">PASTE IMPORT</button>
+      </div>
+      <div class="import-pane active" id="importPaneFile">
+        <div class="form-row" style="font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.6">
+          A CHRONO backup file. Accepts a v4 envelope, a v3 envelope, or a raw event array.
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="triggerImport()">CHOOSE FILE&#8230;</button>
+      </div>
+      <div class="import-pane" id="importPanePaste">
+        <div class="form-row" style="font-family:var(--mono);font-size:10px;color:var(--text3);line-height:1.6">
+          Paste your old calendar data here. Use this when the old app is on a different address —
+          it accepts a raw <b>chrono_v2_events</b> array, a v3 backup, or a v4 envelope.
+        </div>
+        <textarea class="paste-area" id="pasteArea" placeholder="Paste or type your old calendar data here"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="pasteFromClipboard()">PASTE FROM CLIPBOARD</button>
+          <button class="btn btn-primary" style="margin-left:auto" onclick="doPasteImport()">RESTORE</button>
+        </div>
+      </div>
+      <div id="importReport" class="import-report"></div>
+    </div>
+  </div>
+</div>
+<input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importBackup(event)" />
+
+<!-- EVENT MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">// NEW EVENT</h3>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>TITLE</label>
+        <input type="text" id="evTitle" placeholder="Event title" />
+      </div>
+      <div class="form-row-inline">
+        <div class="form-row">
+          <label>DATE</label>
+          <input type="date" id="evDate" />
+        </div>
+        <div class="form-row">
+          <label>ALL DAY</label>
+          <select id="evAllDay" onchange="toggleTime()">
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>
+      </div>
+      <div id="timeRow" class="form-row-inline">
+        <div class="form-row"><label>START</label><input type="time" id="evStart" value="09:00" /></div>
+        <div class="form-row"><label>END</label><input type="time" id="evEnd" value="10:00" /></div>
+      </div>
+      <div class="form-row-inline">
+        <div class="form-row">
+          <label>CALENDAR</label>
+          <select id="evCalendar" onchange="onEventCalendarChange()"></select>
+        </div>
+        <div class="form-row">
+          <label>LINK (optional)</label>
+          <input type="text" id="evLink" placeholder="https://" />
+        </div>
+      </div>
+      <div class="form-row" id="calLockNote" style="font-family:var(--mono);font-size:9px;color:#e3c46b;letter-spacing:.5px;margin-bottom:13px"></div>
+      <div class="recur-section">
+        <label>REPEAT</label>
+        <div class="recur-opts">
+          <button class="recur-opt active" data-r="none"    onclick="setRecur(this)">NONE</button>
+          <button class="recur-opt"        data-r="daily"   onclick="setRecur(this)">DAILY</button>
+          <button class="recur-opt"        data-r="weekly"  onclick="setRecur(this)">WEEKLY</button>
+          <button class="recur-opt"        data-r="monthly" onclick="setRecur(this)">MONTHLY</button>
+          <button class="recur-opt"        data-r="yearly"  onclick="setRecur(this)">YEARLY</button>
+        </div>
+        <div class="recur-end-row" id="recurEndRow">
+          <div class="form-row" style="margin-top:8px;margin-bottom:0">
+            <label>END DATE (optional)</label>
+            <input type="date" id="evRecurEnd" />
+          </div>
+        </div>
+        <div class="weekly-days-row" id="weeklyDaysRow">
+          <label>REPEAT ON</label>
+          <div class="weekly-day-btns">
+            <button type="button" class="weekly-day-btn" data-wd="0">SUN</button>
+            <button type="button" class="weekly-day-btn" data-wd="1">MON</button>
+            <button type="button" class="weekly-day-btn" data-wd="2">TUE</button>
+            <button type="button" class="weekly-day-btn" data-wd="3">WED</button>
+            <button type="button" class="weekly-day-btn" data-wd="4">THU</button>
+            <button type="button" class="weekly-day-btn" data-wd="5">FRI</button>
+            <button type="button" class="weekly-day-btn" data-wd="6">SAT</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-row"><label>NOTES</label><textarea id="evDesc" placeholder="Add notes..."></textarea></div>
+      <div class="form-row">
+        <label>CATEGORY</label>
+        <div class="category-picker" id="categoryPicker">
+          <button type="button" class="cat-btn active" data-cat="" data-hex="#7dd8f0" onclick="pickCat(this)"><span class="cat-dot" style="background:#7dd8f0"></span>WORK</button>
+          <button type="button" class="cat-btn" data-cat="ev-green"  data-hex="#7dddb0" onclick="pickCat(this)"><span class="cat-dot" style="background:#7dddb0"></span>PERSONAL</button>
+          <button type="button" class="cat-btn" data-cat="ev-orange" data-hex="#f5b07a" onclick="pickCat(this)"><span class="cat-dot" style="background:#f5b07a"></span>FITNESS</button>
+          <button type="button" class="cat-btn" data-cat="ev-yellow" data-hex="#f5d57a" onclick="pickCat(this)"><span class="cat-dot" style="background:#f5d57a"></span>TRAVEL</button>
+          <button type="button" class="cat-btn" data-cat="ev-teal"   data-hex="#a8b8e8" onclick="pickCat(this)"><span class="cat-dot" style="background:#a8b8e8"></span>SLEEP</button>
+          <button type="button" class="cat-btn" data-cat="ev-purple" data-hex="#c4b0f7" onclick="pickCat(this)"><span class="cat-dot" style="background:#c4b0f7"></span>FINANCE</button>
+          <button type="button" class="cat-btn" data-cat="ev-lime"   data-hex="#d8f07a" onclick="pickCat(this)"><span class="cat-dot" style="background:#d8f07a"></span>MEALS</button>
+          <button type="button" class="cat-btn" data-cat="ev-pink"   data-hex="#f7c8e0" onclick="pickCat(this)"><span class="cat-dot" style="background:#f7c8e0"></span>HYGIENE</button>
+          <button type="button" class="cat-btn" data-cat="ev-red"    data-hex="#f28b9a" onclick="pickCat(this)"><span class="cat-dot" style="background:#f28b9a"></span>SOCIAL</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="deleteBtn" onclick="onDeleteClick()" style="display:none;margin-right:auto">DELETE</button>
+      <button class="btn btn-ghost" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-primary" onclick="saveEvent()">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<!-- RECUR SCOPE DIALOG (BUG-2 / H-2: third option = from this date forward) -->
+<div class="recur-dialog" id="recurDialog">
+  <div class="recur-box">
+    <h4>// EDIT RECURRING EVENT</h4>
+    <div class="recur-choices">
+      <label><input type="radio" name="recurScope" value="this" checked> This occurrence only</label>
+      <label><input type="radio" name="recurScope" value="all"> All events in series</label>
+      <label><input type="radio" name="recurScope" value="forward"> From this date forward</label>
+    </div>
+    <div class="recur-actions">
+      <button class="btn btn-ghost" onclick="closeRecurDialog()">CANCEL</button>
+      <button class="btn btn-primary" onclick="confirmRecurAction()">CONFIRM</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAYDAY DETAIL -->
+<div class="recur-dialog" id="payDialog">
+  <div class="recur-box" style="width:360px">
+    <h4>// PAYDAY</h4>
+    <div id="payText" style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:16px"></div>
+    <div class="recur-actions">
+      <button class="btn btn-ghost" onclick="closePayDialog()">CLOSE</button>
+      <button class="btn btn-primary" onclick="openAtlasPayPeriod()">OPEN ATLAS PAY PERIOD</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL POPUP -->
+<div class="detail-popup" id="detailPopup">
+  <button class="detail-sheet-handle" onclick="closeDetail()" title="Close"><i></i></button>
+  <div class="detail-top">
+    <button onclick="editFromDetail()" title="Edit">&#9998;</button>
+    <button class="del" onclick="deleteFromDetail()" title="Delete">&#x2715;</button>
+    <button onclick="closeDetail()" title="Close">&#8211;</button>
+  </div>
+  <div class="detail-body">
+    <div class="detail-title"><div class="detail-color-bar" id="detailColorBar"></div><span id="detailTitle"></span></div>
+    <div class="detail-time"  id="detailTime"></div>
+    <div class="detail-recur" id="detailRecur"></div>
+    <div class="detail-cal"   id="detailCal"></div>
+    <div class="detail-cat"   id="detailCat" style="font-size:9px;font-family:var(--mono);letter-spacing:1px;margin-bottom:3px;opacity:.6"></div>
+    <div class="detail-desc"  id="detailDesc"></div>
+    <div id="detailLinkRow" style="margin-top:8px"></div>
+    <div class="detail-move" id="detailMove">
+      <div class="detail-move-label">// MOVE EVENT</div>
+      <div class="move-shift-row">
+        <button class="move-shift" onclick="shiftEvent(-1,0)"  title="One day earlier">&#8249; DAY</button>
+        <button class="move-shift" onclick="shiftEvent(0,-15)" title="15 minutes earlier">-15M</button>
+        <button class="move-shift" onclick="shiftEvent(0,15)"  title="15 minutes later">+15M</button>
+        <button class="move-shift" onclick="shiftEvent(1,0)"   title="One day later">DAY &#8250;</button>
+      </div>
+      <div class="move-shift-row" style="margin-top:4px">
+        <button class="move-shift wide" onclick="shiftEvent(-7,0)" title="One week earlier">&#8249; WEEK</button>
+        <button class="move-shift wide" onclick="shiftEvent(7,0)"  title="One week later">WEEK &#8250;</button>
+      </div>
+      <button class="move-edit-btn" onclick="editFromDetail()">MOVE TO EXACT DATE / TIME&#8230;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   CHRONO v4 — built by PILOT (APP WORKS, step 2) from FORGE's spec
+   Station\FORGE\chrono-v4-spec.md · buy of the approved v3 base
+   Time Management\PILOT\chrono-v3\index.html
+
+   Sections implemented here:
+     A  multi-calendar model (calendars, calendarId, stripe, filter, manager)
+     B  generated US federal holiday calendar (rules, not a date list)
+     C  one-time idempotent migration of the v2 data + paste import (R-1)
+     D  BUG-2 .. BUG-12
+     E  feature parity with v2 (all 82 items)
+     F  no cloud sync — export/import is the data path (stated in the UI)
+     G  PWA shell (manifest + service worker) and the APK scaffolding
+     H  H-1 duty days · H-2 split-series · H-3 week templates ·
+        H-4 payday markers · H-5 countdown ticker · H-6 event link
+   The approved visual design is UNCHANGED: same palette, same Inter/JetBrains
+   Mono, same desktop layout. Everything v4 adds is additive.
+   ============================================================================ */
+
+const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const WDAYS  = ['MON','TUE','WED','THU','FRI','SAT','SUN']; // Monday-first column order
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// The approved category palette (v2 values, untouched).
+const COLOR_HEX = { '':'#7dd8f0','ev-green':'#7dddb0','ev-red':'#f28b9a','ev-yellow':'#f5d57a','ev-purple':'#c4b0f7','ev-teal':'#a8b8e8','ev-orange':'#f5b07a','ev-lime':'#d8f07a','ev-pink':'#f7c8e0' };
+const CAT_LABEL = { '':'WORK','ev-green':'PERSONAL','ev-orange':'FITNESS','ev-yellow':'TRAVEL','ev-teal':'SLEEP','ev-purple':'FINANCE','ev-red':'SOCIAL','ev-lime':'MEALS','ev-pink':'HYGIENE' };
+const RECUR_LBL = { none:'', daily:'\u21bb DAILY', weekly:'\u21bb WEEKLY', monthly:'\u21bb MONTHLY', yearly:'\u21bb YEARLY' };
+// Calendar swatches are drawn from the same approved hexes — no new colours.
+const PALETTE = ['#7dd8f0','#7dddb0','#f28b9a','#f5d57a','#c4b0f7','#a8b8e8','#f5b07a','#d8f07a','#f7c8e0'];
+
+// Duty-day modes (H-1). offset = minutes every non-overnight timed block on
+// that date moves forward by.
+const DUTY_MODES = [
+  { key:'NORMAL',  offset:0   },
+  { key:'DUTY',    offset:60  },
+  { key:'FIELD',   offset:40  },
+  { key:'RANGE',   offset:120 },
+  { key:'LIBERTY', offset:-60 }
+];
+const DUTY_ORDER = DUTY_MODES.map(d => d.key);
+const DUTY_COLOR = { NORMAL:'#3d5166', DUTY:'#7dd8f0', FIELD:'#f5b07a', RANGE:'#f28b9a', LIBERTY:'#7dddb0' };
+const SEED_VERSION = 'v4';
+
+// ---- BUG-5: one escape helper, used at every site that writes text into HTML
+function esc(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+// Only http(s) links are ever turned into an href (H-6): javascript: is refused.
+function safeUrl(u) {
+  const s = String(u || '').trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+function calUid() { return 'cal_' + Math.random().toString(36).slice(2,8); }
+function dateStr(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function parseLocal(s) { return new Date(s+'T00:00:00'); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function addDaysStr(ds, n) { return dateStr(addDays(parseLocal(ds), n)); }
+function shiftDateStr(ds, days) { return addDaysStr(ds, days); }
+function shiftTimeStr(t, mins) {
+  const p = String(t||'09:00').split(':');
+  let tot = (+p[0])*60 + (+p[1]) + mins;
+  tot = ((tot % 1440) + 1440) % 1440;
+  return String(Math.floor(tot/60)).padStart(2,'0') + ':' + String(tot%60).padStart(2,'0');
+}
+function minuteOf(t) { const p = String(t||'00:00').split(':'); return (+p[0])*60 + (+p[1]); }
+
+// ---- VIEW / DATE STATE ----
+let today      = new Date();
+let cursor     = new Date(today);
+let view       = 'week';
+let customDays = (function(){
+  try {
+    const v = JSON.parse(localStorage.getItem('chrono_custom_days') || '[1,2,3,4,5]');
+    return Array.isArray(v) && v.length ? v : [1,2,3,4,5];
+  } catch (err) { return [1,2,3,4,5]; }
+})();
+function todayStr() { return dateStr(today); }
+
+// ---- STORAGE LOAD (failure path: unreadable JSON must not blank the app) ----
+let storageCorrupt = false;
+function loadJSON(key, fallback) {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return (parsed === null || parsed === undefined) ? fallback : parsed;
+  } catch (err) {
+    storageCorrupt = true;
+    return fallback;
+  }
+}
+let events     = loadJSON('chrono_v2_events', []);
+let exceptions = loadJSON('chrono_v2_exceptions', {});
+let calendars  = loadJSON('chrono_v4_calendars', []);
+if (!Array.isArray(events))     { events = [];        storageCorrupt = true; }
+if (!exceptions || typeof exceptions !== 'object' || Array.isArray(exceptions)) { exceptions = {}; storageCorrupt = true; }
+if (!Array.isArray(calendars))  { calendars = []; }
+
+// ============================================================================
+// A. MULTI-CALENDAR MODEL
+// ============================================================================
+function DEFAULT_CALENDAR() {
+  return { id:'cal_default', name:'My Calendar', color:'#7dd8f0', colorMode:'category',
+           visible:true, order:0, kind:'user', readOnly:false, suppressed:[] };
+}
+function HOLIDAY_CALENDAR() {
+  return { id:'cal_holidays_us', name:'US Federal Holidays', color:'#f28b9a',
+           colorMode:'calendar', visible:true, order:1, kind:'holiday', readOnly:true,
+           holidaySet:'us-federal', years:[], suppressed:[] };
+}
+function PAYDAY_CALENDAR() {
+  return { id:'cal_paydays', name:'Paydays', color:'#7dddb0', colorMode:'calendar',
+           visible:true, order:2, kind:'user', readOnly:false, suppressed:[] };
+}
+function seedCalendars() {
+  return [DEFAULT_CALENDAR(), HOLIDAY_CALENDAR(), PAYDAY_CALENDAR()];
+}
+function calById(id) { return calendars.find(c => c.id === id) || null; }
+function calForEvent(ev) { return calById(ev && ev.calendarId) || calById('cal_default') || calendars[0] || null; }
+
+// A.4 — colour resolution, exactly the one rule in the spec.
+function renderedColour(ev) {
+  const c = calForEvent(ev);
+  if (c && c.colorMode === 'calendar' && c.color) return c.color;
+  if (ev && ev.color && COLOR_HEX[ev.color]) return COLOR_HEX[ev.color];
+  if (c && c.color) return c.color;
+  return COLOR_HEX['ev-green'];
+}
+// The calendar colour is its own dimension: the card keeps its category class
+// and gains a 3px stripe, so the approved look does not change.
+function calStripeStyle(ev) {
+  const c = calForEvent(ev);
+  return 'background:' + (c ? c.color : COLOR_HEX['ev-green']) + ';';
+}
+
+// A.7 — filter state. Nothing here ever mutates event data.
+function activeCalIds() {
+  const stored = loadJSON('chrono_active_calendars', null);
+  if (Array.isArray(stored)) return stored;
+  return calendars.filter(c => c.visible).map(c => c.id);
+}
+let activeCalendars = activeCalIds();
+function setActiveCalendars(ids) {
+  activeCalendars = ids.slice();
+  try { localStorage.setItem('chrono_active_calendars', JSON.stringify(activeCalendars)); } catch (err) {}
+}
+function calIsShown(cal) {
+  if (!cal) return true;
+  if (!cal.visible) return false;                    // hidden wins over the filter list
+  if (!calendars.some(c => c.id === cal.id)) return true;
+  return activeCalendars.indexOf(cal.id) !== -1;
+}
+
+// JARVIS 2026-11-09 — FIRST-RUN BLANK GRID FIX.
+// `activeCalendars` is captured at script load, when `calendars` is still the
+// empty array from storage. The calendars are only created later, inside
+// migrateToV4()/boot(). So on a fresh install the filter list was empty while
+// the calendars existed, calIsShown() returned false for EVERY calendar, and
+// the whole week grid rendered blank with every legend row marked hidden.
+// This reconciles the filter against the calendar set that actually exists.
+function reconcileActiveCalendars() {
+  const stored = loadJSON('chrono_active_calendars', null);
+  const visibleIds = calendars.filter(c => c.visible).map(c => c.id);
+  if (!Array.isArray(stored)) { activeCalendars = visibleIds; return false; }
+  const live = new Set(calendars.map(c => c.id));
+  const kept = stored.filter(function(id){ return live.has(id); });
+  // A stored filter pointing at nothing live is stale (the calendar set was
+  // rebuilt). Showing everything beats showing a blank grid.
+  activeCalendars = kept.length ? kept : visibleIds;
+  return false;
+}
+function eventVisible(ev) { return calIsShown(calForEvent(ev)); }
+function hiddenCalStats() {
+  const total = calendars.length;
+  const shown = calendars.filter(calIsShown).length;
+  return { total, shown, filtered: shown !== total };
+}
+
+// ============================================================================
+// B. THE HOLIDAY CALENDAR — generated from rules, never hardcoded
+// ============================================================================
+function nthWeekday(year, monthIndex, weekday, n) {
+  const first = new Date(year, monthIndex, 1);
+  const offset = (weekday - first.getDay() + 7) % 7;
+  if (n === -1) {
+    const last = new Date(year, monthIndex + 1, 0);
+    const back = (last.getDay() - weekday + 7) % 7;
+    return new Date(year, monthIndex, last.getDate() - back);
+  }
+  return new Date(year, monthIndex, 1 + offset + (n - 1) * 7);
+}
+function observedDate(d) {
+  const w = d.getDay();
+  if (w === 6) return addDays(d, -1);   // Saturday -> Friday before
+  if (w === 0) return addDays(d, 1);    // Sunday   -> Monday after
+  return d;
+}
+// The eleven federal holidays, each computed from its rule for the given year.
+// Verified against the spec's B.5 table (2026 and 2027).
+function usFederalHolidays(year) {
+  const fixed = [
+    ['new_years',  "New Year's Day",            0,  1, 'January 1'],
+    ['juneteenth', 'Juneteenth National Independence Day', 5, 19, 'June 19'],
+    ['independence','Independence Day',          6,  4, 'July 4'],
+    ['veterans',   'Veterans Day',               10, 11, 'November 11'],
+    ['christmas',  'Christmas Day',              11, 25, 'December 25']
+  ];
+  const out = [];
+  fixed.forEach(function(r){
+    const actual = new Date(year, r[2], r[3]);
+    const obs = observedDate(actual);
+    out.push({
+      rule: r[0], name: r[1],
+      date: dateStr(obs), actual: dateStr(actual),
+      ruleText: r[4],
+      observed: dateStr(obs) !== dateStr(actual)
+    });
+  });
+  const nth = [
+    ['mlk',                 'Birthday of Martin Luther King, Jr.', 0,  1,  3, '3rd Monday of January'],
+    ['washingtons_birthday','Washington\u2019s Birthday',          1,  1,  3, '3rd Monday of February'],
+    ['memorial',            'Memorial Day',                        4,  1, -1, 'Last Monday of May'],
+    ['labor',               'Labor Day',                           8,  1,  1, '1st Monday of September'],
+    ['columbus',            'Columbus Day',                        9,  1,  2, '2nd Monday of October'],
+    ['thanksgiving',        'Thanksgiving Day',                    10, 4,  4, '4th Thursday of November']
+  ];
+  nth.forEach(function(r){
+    const d = nthWeekday(year, r[2], r[3], r[4]);
+    out.push({ rule: r[0], name: r[1], date: dateStr(d), actual: dateStr(d), ruleText: r[5], observed:false });
+  });
+  return out.sort((a,b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+}
+function makeHolidayEvent(calId, h, key) {
+  return {
+    id: 'hol_' + h.rule + '_' + h.date.replace(/-/g,''),
+    title: h.name,
+    date: h.date,
+    allDay: true,
+    start: '00:00',
+    end: '23:59',
+    desc: h.observed ? ('Observed date \u2014 ' + h.name + ' actually falls on ' + h.actual + ' (' + h.ruleText + ')') : h.ruleText,
+    color: '',
+    recurrence: 'none',
+    recurrenceEnd: '',
+    weeklyDays: [],
+    calendarId: calId,
+    generated: true,
+    holidayKey: key,
+    holidayRule: h.rule,
+    link: ''
+  };
+}
+// B.4 — idempotent: deduped by holidayKey, skips anything the Commander deleted.
+function ensureHolidays(cal, yearsWanted) {
+  if (!cal || cal.kind !== 'holiday') return 0;
+  const existing = new Set(events.filter(e => e.calendarId === cal.id || e.holidayKey).map(e => e.holidayKey));
+  const suppressed = new Set(cal.suppressed || []);
+  if (!Array.isArray(cal.years)) cal.years = [];
+  let added = 0;
+  yearsWanted.forEach(function(y){
+    usFederalHolidays(y).forEach(function(h){
+      const key = h.rule + '|' + h.date;
+      if (suppressed.has(key))  return;   // he deleted it — it never comes back
+      if (existing.has(key))    return;   // already there (generated or edited)
+      events.push(makeHolidayEvent(cal.id, h, key));
+      existing.add(key);
+      added++;
+    });
+    if (cal.years.indexOf(y) === -1) cal.years.push(y);
+  });
+  cal.years.sort((a,b)=>a-b);
+  return added;
+}
+function currentYear() { return new Date().getFullYear(); }
+function ensureHolidaysForCursor() {
+  const cal = calById('cal_holidays_us');
+  if (!cal) return 0;
+  const y = currentYear();
+  const wanted = [y, y+1];
+  const cy = cursor.getFullYear();
+  if (wanted.indexOf(cy) === -1) wanted.push(cy);       // whatever year he is viewing
+  return ensureHolidays(cal, wanted);
+}
+
+// ---- PAYDAY MARKERS (H-4): military pay lands on the 1st and 15th, adjusted
+// for weekends with the same observed rule as the holidays.
+function paydaysForYear(year) {
+  const out = [];
+  [0,1,2,3,4,5,6,7,8,9,10,11].forEach(function(m){
+    [1,15].forEach(function(day){
+      const actual = new Date(year, m, day);
+      const obs = observedDate(actual);
+      out.push({ date: dateStr(obs), actual: dateStr(actual), month:m, day:day });
+    });
+  });
+  return out.sort((a,b)=> a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+}
+function ensurePaydays(cal, years) {
+  if (!cal) return 0;
+  const existing = new Set(events.filter(e => e.calendarId === cal.id).map(e => e.payKey));
+  let added = 0;
+  years.forEach(function(y){
+    paydaysForYear(y).forEach(function(p){
+      const key = 'payday|' + p.date;
+      if (existing.has(key)) return;
+      events.push({
+        id: 'pay_' + p.date.replace(/-/g,''), title: 'PAYDAY', date: p.date, allDay: true,
+        start:'00:00', end:'23:59',
+        desc: 'Military payday. Actual 1st/15th: ' + p.actual + '. Tap the PAYDAY chip in MONTH view to open the ATLAS pay period.',
+        color: '', recurrence:'none', recurrenceEnd:'', weeklyDays: [],
+        calendarId: cal.id, payKey: key, link:''
+      });
+      existing.add(key);
+      added++;
+    });
+  });
+  return added;
+}
+
+// ============================================================================
+// C. MIGRATION — one-time, idempotent, zero data loss (spec section C)
+// ============================================================================
+function migrateToV4() {
+  const MARKER = 'chrono_schema_v4';
+
+  // Guard 1: the versioned marker. Present => nothing to do.
+  if (localStorage.getItem(MARKER)) {
+    if (!calendars.length) calendars = seedCalendars();
+    if (!calById('cal_default')) calendars.unshift(DEFAULT_CALENDAR());
+    return false;
+  }
+
+  // STEP 1 — safety net (R-3): raw pre-v4 strings, taken before any v4 write.
+  if (localStorage.getItem('chrono_schema_v4_legacy_snapshot') === null) {
+    try {
+      localStorage.setItem('chrono_schema_v4_legacy_snapshot', JSON.stringify({
+        events:     localStorage.getItem('chrono_v2_events'),
+        exceptions: localStorage.getItem('chrono_v2_exceptions'),
+        takenAt:    new Date().toISOString()
+      }));
+    } catch (err) {}
+  }
+
+  // STEP 2 — build the calendar set if there is not one.
+  if (!Array.isArray(calendars) || calendars.length === 0) calendars = seedCalendars();
+  if (!calByUidSafe()) calendars.unshift(DEFAULT_CALENDAR());
+
+  // STEP 3 — stamp calendarId onto every event that lacks one. This IS the
+  // "return my old events" mechanism: the existing array is walked once, in
+  // place, and each un-tagged event is pointed at the default calendar.
+  events.forEach(function(ev){
+    if (!ev || typeof ev !== 'object') return;
+    if (typeof ev.calendarId !== 'string' || ev.calendarId === '') ev.calendarId = 'cal_default';
+  });
+
+  // STEP 4 — repair dangling references (an event pointing at a deleted calendar).
+  const liveIds = new Set(calendars.map(c => c.id));
+  events.forEach(function(ev){ if (ev && !liveIds.has(ev.calendarId)) ev.calendarId = 'cal_default'; });
+
+  // STEP 5 — seed the generated calendars (idempotent by themselves).
+  const hol = calById('cal_holidays_us');
+  if (hol) ensureHolidays(hol, [currentYear(), currentYear()+1]);
+  const pay = calById('cal_paydays');
+  if (pay) ensurePaydays(pay, [currentYear(), currentYear()+1]);
+
+  // STEP 6 — write back and mark done. SAME KEYS as v2 for the data.
+  writeStorage();
+  try { localStorage.setItem(MARKER, 'v4-' + new Date().toISOString()); } catch (err) {}
+  return true;
+}
+function calByUidSafe() { return calendars.some(c => c.id === 'cal_default'); }
+
+// ---- duty-day modes (H-1) ----
+let dutyModes = loadJSON('chrono_duty_days', {});
+if (!dutyModes || typeof dutyModes !== 'object' || Array.isArray(dutyModes)) dutyModes = {};
+function dutyOffset(ds) {
+  const m = dutyModes[ds];
+  if (!m) return 0;
+  const d = DUTY_MODES.find(x => x.key === m);
+  return d ? d.offset : 0;
+}
+function cycleDuty(ds) {
+  pushHistory();
+  const cur = dutyModes[ds] || 'NORMAL';
+  const i = DUTY_ORDER.indexOf(cur);
+  const next = DUTY_ORDER[(i + 1) % DUTY_ORDER.length];
+  if (next === 'NORMAL') delete dutyModes[ds]; else dutyModes[ds] = next;
+  saveAll(); render();
+  toast(ds + ' — ' + next);
+}
+
+// ---- central write ----
+function writeStorage() {
+  localStorage.setItem('chrono_v2_events', JSON.stringify(events));       // SAME KEY AS v2
+  localStorage.setItem('chrono_v2_exceptions', JSON.stringify(exceptions)); // SAME KEY AS v2
+  localStorage.setItem('chrono_v4_calendars', JSON.stringify(calendars));
+  localStorage.setItem('chrono_duty_days', JSON.stringify(dutyModes));
+}
+function saveAll() {
+  try {
+    writeStorage();
+  } catch (err) {
+    alert('CHRONO could not save to this device\u2019s storage. Use EXPORT to back up your events.');
+  }
+  if (typeof HOUR_ZOOM_MODE !== 'undefined' && HOUR_ZOOM_MODE === 'auto') refreshZoom();
+}
+
+// ============================================================================
+// SEEDING — once, behind a versioned marker (parity #75-#77)
+// v2 deleted and rebuilt every seeded event on EVERY load: that is the
+// data-eater. v4 seeds once and never touches user state again. It also
+// honours v3's marker so an existing v3 user is not re-seeded.
+// ============================================================================
+(function seedWorkouts(){
+  const MARKER = 'chrono_seeded_' + SEED_VERSION;
+  if (localStorage.getItem(MARKER)) return;
+  if (localStorage.getItem('chrono_seeded_v3')) {
+    localStorage.setItem(MARKER, 'migrated-from-v3-' + new Date().toISOString());
+    return;
+  }
+  const hasOldSeeds = events.some(e => (e.id || '').startsWith('seed-w-'));
+  if (hasOldSeeds) {
+    localStorage.setItem(MARKER, 'migrated-' + new Date().toISOString());
+    return;
+  }
+  const mk = (id,title,date,start,end,color,days,desc)=>({
+    id, title, date, allDay:false, start, end, desc:desc||'', color,
+    recurrence:'weekly', recurrenceEnd:'', weeklyDays:days,
+    calendarId:'cal_default', link:''
+  });
+  const days = [
+    ['mon',1,'2026-11-02','Gym','Push Workout','Push day - see workout app for exercises','16:50'],
+    ['tue',2,'2026-11-03','Gym','Pull Workout','Pull day - see workout app for exercises','16:50'],
+    ['wed',3,'2026-11-04','Track','3-Mile Run','3-mile run - pace work toward sub-18:00','16:50'],
+    ['thu',4,'2026-11-05','Gym','Legs Workout','Legs day - after Field Day','17:30'],
+    ['fri',5,'2026-11-06','Gym','Upper Workout','Upper day - see workout app for exercises','16:50'],
+    ['sat',6,'2026-11-07','Track','Easy Run','Easy aerobic run','16:50'],
+  ];
+  const seeds = [];
+  days.forEach(function(d){
+    const k=d[0], wd=d[1], dt=d[2], dest=d[3], wo=d[4], desc=d[5], t0=d[6];
+    seeds.push(mk('seed-w-'+k+'-d1','Drive to '+dest, dt, t0,              shiftTimeStr(t0,10),  'ev-yellow',[wd]));
+    seeds.push(mk('seed-w-'+k+'-wo',wo,              dt, shiftTimeStr(t0,10), shiftTimeStr(t0,80),  'ev-orange',[wd],desc));
+    seeds.push(mk('seed-w-'+k+'-d2','Drive to Barracks', dt, shiftTimeStr(t0,80), shiftTimeStr(t0,90),  'ev-yellow',[wd]));
+    seeds.push(mk('seed-w-'+k+'-hy','Hygiene & Changeover into Civvies', dt, shiftTimeStr(t0,90), shiftTimeStr(t0,120), 'ev-pink',[wd]));
+  });
+  const allWk = [0,1,2,3,4,5,6];
+  seeds.push(mk('seed-sleep-night','Sleep','2026-11-01','21:30','05:30','ev-teal',allWk,'Sleep'));
+  // One recurring 5-minute money check (H-4), linked to the ATLAS tracker.
+  const mc = mk('seed-money-check','Money check','2026-11-02','20:00','20:05','ev-purple',allWk,'Five minutes: look at the balance and the next bill. Link opens ATLAS.');
+  mc.link = 'https://youraveragegamer4407.github.io/atlas-tracker/';
+  seeds.push(mc);
+  events = events.concat(seeds);
+  localStorage.setItem(MARKER, 'seeded-' + new Date().toISOString());
+  // Write storage DIRECTLY: HOUR_ZOOM_MODE is declared with `let` further down
+  // and is still in its temporal dead zone here, so saveAll() would throw.
+  try {
+    localStorage.setItem('chrono_v2_events', JSON.stringify(events));
+    localStorage.setItem('chrono_v2_exceptions', JSON.stringify(exceptions));
+  } catch (err) {}
+})();
+
+// ---- HOUR ZOOM ----
+let HOUR_ZOOM_MODE = localStorage.getItem('chrono_hour_zoom_mode') || '64';
+let HOUR_PX = HOUR_ZOOM_MODE === 'auto' ? 64 : (parseInt(HOUR_ZOOM_MODE, 10) || 64);
+function computeAutoHourPx() {
+  let minDur = Infinity;
+  const ws = wkStart(cursor);
+  const rangeStart = dateStr(new Date(ws.getTime() - 7 * 864e5));
+  const rangeEnd = dateStr(new Date(ws.getTime() + 14 * 864e5));
+  try {
+    expandRange(rangeStart, rangeEnd).forEach(function(x){
+      const ev = x.ev;
+      if (ev.allDay || !ev.start || !ev.end) return;
+      let dur = minuteOf(x.ce || ev.end) - minuteOf(x.cs || ev.start);
+      if (dur <= 0) dur += 1440;
+      if (dur > 0 && dur < minDur) minDur = dur;
+    });
+  } catch (e) { /* fall through to the default */ }
+  if (!isFinite(minDur)) return 64;
+  return Math.min(520, Math.max(64, Math.ceil(44 * 60 / minDur)));
+}
+function applyHourPx(px) { HOUR_PX = px; document.documentElement.style.setProperty('--hh', HOUR_PX + 'px'); }
+function refreshZoom() {
+  if (HOUR_ZOOM_MODE === 'auto') applyHourPx(computeAutoHourPx());
+  else applyHourPx(parseInt(HOUR_ZOOM_MODE, 10) || 64);
+}
+function setHourZoom(v) {
+  HOUR_ZOOM_MODE = v;
+  localStorage.setItem('chrono_hour_zoom_mode', v);
+  refreshZoom(); render();
+}
+function applyHourZoomUI() {
+  refreshZoom();
+  const s = document.getElementById('hourZoom');
+  if (s) s.value = HOUR_ZOOM_MODE;
+}
+
+// ---- TIME FORMAT (parity #66, #71) ----
+let TIME_FMT = localStorage.getItem('chrono_time_fmt') || '12';
+function fmtTime(t) {
+  if (!t) return '';
+  const p = String(t).split(':'); let h = +p[0]; const m = p[1];
+  if (TIME_FMT === '24') return String(h).padStart(2,'0') + ':' + m;
+  const ap = h < 12 ? 'AM' : 'PM'; let hh = h % 12; if (hh === 0) hh = 12;
+  return hh + ':' + m + ap;
+}
+function fmtHourLbl(i) {
+  if (TIME_FMT === '24') return String(i).padStart(2,'0') + ':00';
+  if (i === 0) return '12AM'; if (i < 12) return i + 'AM'; if (i === 12) return '12PM'; return (i-12) + 'PM';
+}
+function setTimeFmt(v) { TIME_FMT = v; localStorage.setItem('chrono_time_fmt', v); render(); }
+function applyTimeFmtUI() { const s = document.getElementById('timeFmt'); if (s) s.value = TIME_FMT; }
+
+// ---- UNDO / REDO (parity #54-#63; calendar ops are undoable too) ----
+let undoStack=[], redoStack=[];
+const UNDO_LIMIT = 100;
+function snapshotState(){ return JSON.stringify({events, exceptions, calendars, dutyModes}); }
+function pushHistory(){
+  undoStack.push(snapshotState());
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoUI();
+}
+function restoreState(snap){
+  const s = JSON.parse(snap);
+  events = s.events; exceptions = s.exceptions;
+  calendars = Array.isArray(s.calendars) ? s.calendars : calendars;
+  dutyModes = (s.dutyModes && typeof s.dutyModes === 'object') ? s.dutyModes : {};
+  saveAll();
+  closeDetail(); closeRecurDialog(); closeCalendarManager();
+  render(); updateUndoRedoUI();
+}
+function doUndo(){
+  if (!undoStack.length) return;
+  redoStack.push(snapshotState());
+  restoreState(undoStack.pop());
+}
+function doRedo(){
+  if (!redoStack.length) return;
+  undoStack.push(snapshotState());
+  restoreState(redoStack.pop());
+}
+function updateUndoRedoUI(){
+  const u=document.getElementById('btnUndo'), r=document.getElementById('btnRedo');
+  if (u) u.disabled = !undoStack.length;
+  if (r) r.disabled = !redoStack.length;
+}
+document.addEventListener('keydown', function(e){
+  const t = e.target;
+  const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
+  if (typing) return;
+  if ((e.ctrlKey||e.metaKey) && !e.shiftKey && (e.key==='z'||e.key==='Z')) { e.preventDefault(); doUndo(); }
+  else if (((e.ctrlKey||e.metaKey) && (e.key==='y'||e.key==='Y')) || ((e.ctrlKey||e.metaKey) && e.shiftKey && (e.key==='z'||e.key==='Z'))) { e.preventDefault(); doRedo(); }
+});
+
+// ============================================================================
+// RECURRENCE ENGINE (parity #39-#43) + duty-day offset (H-1)
+// ============================================================================
+function overnight(ev){
+  if (ev.allDay || !ev.start || !ev.end) return false;
+  return minuteOf(ev.end) <= minuteOf(ev.start);
+}
+function minsToStr(m) {
+  if (m >= 1440) return '24:00';
+  return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+}
+// Apply a duty-day offset at render time only. Stored values are never changed,
+// so switching a day back to NORMAL restores it exactly.
+function applyDuty(ev, cs, ce, ds) {
+  const off = dutyOffset(ds);
+  if (!off || ev.allDay || overnight(ev)) return [cs, ce];
+  let a = minuteOf(cs) + off, b = minuteOf(ce) + off;
+  if (a < 0) { b += (-a); a = 0; }
+  if (b > 1440) { a -= (b - 1440); b = 1440; if (a < 0) a = 0; }
+  return [minsToStr(a), minsToStr(b)];
+}
+function pushOcc(result, ev, occ, startDs, endDs){
+  if (overnight(ev)) {
+    // One continuous block crossing midnight: clipped at midnight for the grid,
+    // but BOTH halves must be emitted whenever their portion is in window —
+    // including the morning continuation of a night that STARTED before it.
+    if (occ >= startDs && occ <= endDs) result.push({ ev, occ, cs: ev.start, ce: '24:00' });
+    const nd = addDaysStr(occ, 1);
+    if (nd >= startDs && nd <= endDs) result.push({ ev, occ: nd, cs: '00:00', ce: ev.end, cont: occ });
+  } else {
+    if (occ >= startDs && occ <= endDs) {
+      const t = applyDuty(ev, ev.start, ev.end, occ);
+      result.push({ ev, occ, cs: t[0], ce: t[1] });
+    }
+  }
+}
+function expandRange(startDs, endDs) {
+  const result = [];
+  // Scan one day earlier than the window so an overnight event that began the
+  // night before startDs still contributes its in-window morning half.
+  const scanStart = addDaysStr(startDs, -1);
+  events.forEach(function(ev){
+    if (!ev || typeof ev !== 'object') return;         // BUG-8: never throw here
+    if (!eventVisible(ev)) return;                     // CAL-3: hidden calendars vanish
+    const exList = exceptions[ev.id] || [];
+    if (!ev.recurrence || ev.recurrence === 'none') {
+      if (ev.date >= scanStart && ev.date <= endDs && exList.indexOf(ev.date) === -1)
+        pushOcc(result, ev, ev.date, startDs, endDs);
+      return;
+    }
+    if (ev.recurrence === 'weekly' && ev.weeklyDays && ev.weeklyDays.length) {
+      const cap = ev.recurrenceEnd || endDs;
+      let cur = parseLocal(scanStart), safety = 0;
+      while (dateStr(cur) <= endDs && dateStr(cur) <= cap && safety++ < 1000) {
+        const ds = dateStr(cur);
+        if (ds >= ev.date && ev.weeklyDays.indexOf(cur.getDay()) !== -1 && exList.indexOf(ds) === -1)
+          pushOcc(result, ev, ds, startDs, endDs);
+        cur = addDays(cur, 1);
+      }
+      return;
+    }
+    const cap = ev.recurrenceEnd || endDs;
+    let cur = parseLocal(ev.date), safety = 0;
+    while (dateStr(cur) <= endDs && dateStr(cur) <= cap && safety++ < 3650) {
+      const ds = dateStr(cur);
+      if (ds >= scanStart && exList.indexOf(ds) === -1) pushOcc(result, ev, ds, startDs, endDs);
+      cur = nextOcc(cur, ev.recurrence);
+    }
+  });
+  return result;
+}
+function nextOcc(d, r) {
+  const n = new Date(d);
+  if (r==='daily')        n.setDate(n.getDate()+1);
+  else if (r==='weekly')  n.setDate(n.getDate()+7);
+  else if (r==='monthly') n.setMonth(n.getMonth()+1);
+  else if (r==='yearly')  n.setFullYear(n.getFullYear()+1);
+  return n;
+}
+function recurLabel(ev) {
+  if (!ev.recurrence || ev.recurrence === 'none') return '';
+  if (ev.recurrence === 'weekly' && ev.weeklyDays && ev.weeklyDays.length) {
+    const names = ev.weeklyDays.slice().sort((a,b)=>a-b).map(d=>DAYS[d]);
+    return '\u21bb WEEKLY \u00b7 ' + names.join(', ');
+  }
+  return RECUR_LBL[ev.recurrence] || '';
+}
+
+// ---- SCROLL MODEL (BUG-6 + BUG-7) -------------------------------------------
+// BUG-6: setView() used to set scrollPinned on every call, so every tab press
+// re-centred the grid at 07:00. Now only deliberate date navigation pins;
+// switching tabs captures the outgoing view's position and restores it.
+// BUG-7: the scroll is applied SYNCHRONOUSLY in the same task as the HTML write
+// — no setTimeout, no requestAnimationFrame — so nothing repaints at scroll 0.
+let gridScrollTop = { week: null, day: null, custom: null };
+let scrollPinned  = false;
+function gridSelectorForView(v) {
+  if (v === 'day') return '.day-time-grid';
+  if (v === 'week' || v === 'custom') return '.week-time-grid';
+  return null;
+}
+function captureScrollTop() {
+  const sel = gridSelectorForView(view);
+  if (!sel) return;
+  const el = document.getElementById('mainView').querySelector(sel);
+  if (el) gridScrollTop[view] = el.scrollTop;
+}
+function wireGridScroll(sel, v) {
+  const el = document.getElementById('mainView').querySelector(sel);
+  if (!el) return;
+  el.addEventListener('scroll', function(){ gridScrollTop[v] = el.scrollTop; }, { passive:true });
+}
+function applyGridScroll() {
+  const sel = gridSelectorForView(view);
+  if (!sel) return;
+  const el = document.getElementById('mainView').querySelector(sel);
+  if (!el) return;
+  if (scrollPinned || gridScrollTop[view] === null) el.scrollTop = 7 * HOUR_PX;
+  else el.scrollTop = gridScrollTop[view];
+  gridScrollTop[view] = el.scrollTop;
+  scrollPinned = false;
+  wireGridScroll(sel, view);
+}
+
+// ============================================================================
+// RENDER DISPATCH
+// ============================================================================
+function render() {
+  updateChrome();
+  updateLabel();
+  renderMini();
+  if (view==='month')       renderMonth();
+  else if (view==='week')   renderWeek();
+  else if (view==='custom') renderCustom();
+  else if (view==='stats')  renderStats();
+  else                      renderDay();
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  const activeBtn = document.getElementById('btn-'+view);
+  if (activeBtn) activeBtn.classList.add('active');
+  document.querySelectorAll('.mobile-nav button').forEach(b=>b.classList.remove('active'));
+  const mBtn = document.getElementById('mnav-'+view);
+  if (mBtn) mBtn.classList.add('active');
+  renderPunchList();
+}
+function updateLabel() {
+  const lbl = document.getElementById('currentLabel');
+  if (!lbl) return;
+  if (view==='month') { lbl.textContent = MONTHS[cursor.getMonth()].toUpperCase()+' '+cursor.getFullYear(); return; }
+  if (view==='week') {
+    const ws = wkStart(cursor), we = addDays(ws,6);
+    lbl.textContent = ws.getMonth()===we.getMonth()
+      ? MONTHS[ws.getMonth()].slice(0,3).toUpperCase()+' '+ws.getFullYear()
+      : MONTHS[ws.getMonth()].slice(0,3).toUpperCase()+' \u2014 '+MONTHS[we.getMonth()].slice(0,3).toUpperCase()+' '+we.getFullYear();
+    return;
+  }
+  if (view==='custom') {
+    lbl.textContent = 'CUSTOM \u00b7 ' + customDays.slice().sort((a,b)=>a-b).map(d=>DAYS[d]).join(' ');
+    return;
+  }
+  lbl.textContent = DAYS[cursor.getDay()]+' '+String(cursor.getDate()).padStart(2,'0')+' '+MONTHS[cursor.getMonth()].slice(0,3).toUpperCase()+' '+cursor.getFullYear();
+}
+function wkStart(d) { const s=new Date(d); s.setDate(s.getDate()-((s.getDay()+6)%7)); s.setHours(0,0,0,0); return s; }
+
+// ---- top chrome: calendar chips, legend, punch list ----
+function updateChrome() {
+  renderCalChips();
+  renderCalLegend();
+  renderCatLegend();     // keeps the DUTY DAY row in step with the cursor
+}
+function renderCalChips() {
+  const row = document.getElementById('calChipRow');
+  if (!row) return;
+  const sorted = calendars.slice().sort((a,b)=> (a.order-b.order) || a.name.localeCompare(b.name));
+  const hidden = sorted.filter(c => !c.visible).length;
+  const visibleIds = sorted.filter(c => c.visible).map(c => c.id);
+  const allOn = visibleIds.length > 0 && visibleIds.every(id => activeCalendars.indexOf(id) !== -1);
+  let h = '<button class="cal-chip' + (allOn ? ' on' : '') + '" onclick="showAllCalendars()">ALL</button>';
+  sorted.forEach(function(c){
+    if (!c.visible) return;
+    const on = activeCalendars.indexOf(c.id) !== -1;
+    h += '<button class="cal-chip' + (on?' on':'') + '" onclick="toggleCalendarFilter(\'' + c.id + '\')" title="' + esc(c.name) + '">'
+       + '<span class="dot" style="background:' + c.color + '"></span>' + esc(c.name) + '</button>';
+  });
+  if (hidden) h += '<button class="cal-chip" onclick="openCalendarManager()">' + hidden + ' HIDDEN</button>';
+  h += '<button class="cal-chip mgr" onclick="openCalendarManager()">+ NEW</button>';
+  row.innerHTML = h;
+}
+function showAllCalendars() { setActiveCalendars(calendars.filter(c=>c.visible).map(c=>c.id)); render(); }
+function toggleCalendarFilter(id) {
+  if (activeCalendars.indexOf(id) === -1) activeCalendars.push(id);
+  else activeCalendars = activeCalendars.filter(x => x !== id);
+  setActiveCalendars(activeCalendars);
+  render();
+}
+function renderCalLegend() {
+  const box = document.getElementById('calLegend');
+  if (!box) return;
+  const sorted = calendars.slice().sort((a,b)=> (a.order-b.order) || a.name.localeCompare(b.name));
+  let h = '';
+  sorted.forEach(function(c){
+    const on = activeCalendars.indexOf(c.id) !== -1;
+    h += '<div class="cal-legend-item' + (c.visible?'':' hidden-cal') + '" onclick="toggleCalendarFilter(\'' + c.id + '\')">'
+       + '<span class="legend-dot" style="background:' + c.color + '"></span>'
+       + '<span class="cal-legend-name">' + esc(c.name) + '</span>'
+       + '<button class="cal-legend-eye" onclick="event.stopPropagation();toggleCalendarVisible(\'' + c.id + '\')" title="' + (c.visible?'Hide':'Show') + '">' + (c.visible ? '&#128065;' : '&#8212;') + '</button>'
+       + (on ? '' : '<span style="color:var(--text3);font-size:9px">off</span>')
+       + '</div>';
+  });
+  box.innerHTML = h;
+}
+function toggleCalendarVisible(id) {
+  const c = calById(id);
+  if (!c) return;
+  pushHistory();
+  c.visible = !c.visible;
+  if (c.visible) { if (activeCalendars.indexOf(id) === -1) activeCalendars.push(id); }
+  else activeCalendars = activeCalendars.filter(x => x !== id);
+  setActiveCalendars(activeCalendars);
+  saveAll(); render(); renderCalManagerList();
+}
+function renderCatLegend() {
+  const box = document.getElementById('catLegend');
+  if (!box) return;
+  const dow = (cursor.getDay()+6)%7;   // Monday-first index, matching WDAYS
+  const ds = dateStr(cursor);
+  const mode = dutyModes[ds] || 'NORMAL';
+  let h = '';
+  Object.keys(CAT_LABEL).forEach(function(c){
+    h += '<div class="legend-item"><div class="legend-dot" style="background:' + (COLOR_HEX[c]||'#7dd8f0') + '"></div>' + esc(CAT_LABEL[c]) + '</div>';
+  });
+  h += '<div class="legend-item" style="margin-top:8px;cursor:pointer" onclick="cycleDuty(\'' + ds + '\')">'
+     + '<div class="legend-dot" style="background:' + (DUTY_COLOR[mode]||'#3d5166') + '"></div>'
+     + 'DUTY DAY: ' + mode + '</div>';
+  h += '<div class="legend-item" style="font-size:9px;color:var(--text3)">WEEKDAY SHOWN: ' + WDAYS[dow] + '</div>';
+  box.innerHTML = h;
+}
+
+// ---- H-5: countdown ticker ----
+let pinnedDates = loadJSON('chrono_pinned_dates', []);
+if (!Array.isArray(pinnedDates)) pinnedDates = [];
+function nextPaydayStr(fromDs) {
+  const y = currentYear();
+  const all = paydaysForYear(y).concat(paydaysForYear(y+1));
+  for (let i=0;i<all.length;i++) if (all[i].date >= fromDs) return all[i].date;
+  return null;
+}
+function daysUntil(ds) {
+  const a = parseLocal(todayStr()).getTime(), b = parseLocal(ds).getTime();
+  return Math.round((b-a)/864e5);
+}
+function renderPunchList() {
+  const el = document.getElementById('punchList');
+  if (!el) return;
+  const items = [];
+  const pay = nextPaydayStr(todayStr());
+  if (pay) items.push({ label:'PAYDAY', ds:pay, pinned:false });
+  const fieldDs = nextWeekdayFrom(todayStr(), 4);   // next Thursday
+  items.push({ label:'FIELD DAY', ds:fieldDs, pinned:false });
+  pinnedDates.forEach(function(ds){ items.push({ label: ds.slice(5), ds:ds, pinned:true }); });
+  const top = items.slice(0,3);
+  if (!top.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = top.map(function(it){
+    const n = daysUntil(it.ds);
+    const txt = n === 0 ? 'TODAY' : (n === 1 ? '1 DAY' : n + ' DAYS');
+    return '<span class="punch-item">' + esc(it.label) + ' <b>' + txt + '</b>'
+         + (it.pinned ? '<button class="punch-x" onclick="unpinDate(\'' + it.ds + '\')" title="Unpin">&#x2715;</button>' : '')
+         + '</span>';
+  }).join('<span style="color:var(--text3)">|</span>')
+    + '<button class="punch-x" style="margin-left:auto" onclick="pinDate()" title="Pin a date">+ PIN DATE</button>';
+}
+function nextWeekdayFrom(ds, wd) {
+  let d = parseLocal(ds);
+  while (d.getDay() !== wd) d = addDays(d, 1);
+  return dateStr(d);
+}
+function pinDate() {
+  const v = prompt('Pin a date (YYYY-MM-DD) to count down to:');
+  if (!v) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) { alert('Use the form YYYY-MM-DD.'); return; }
+  pinnedDates.push(v.trim());
+  localStorage.setItem('chrono_pinned_dates', JSON.stringify(pinnedDates));
+  renderPunchList();
+}
+function unpinDate(ds) {
+  pinnedDates = pinnedDates.filter(d => d !== ds);
+  localStorage.setItem('chrono_pinned_dates', JSON.stringify(pinnedDates));
+  renderPunchList();
+}
+
+// ============================================================================
+// VIEWS
+// ============================================================================
+function layoutOverlap(items){
+  const evs = items.map(function(x){
+    return { ev:x.ev, occ:x.occ, s:minuteOf(x.cs || x.ev.start), e:minuteOf(x.ce || x.ev.end), key:x.ev.id+'|'+x.occ };
+  }).sort((a,b)=> a.s-b.s || b.e-a.e);
+  const res = {}, clusters = [];
+  let cluster = null, clusterEnd = -1;
+  for (const it of evs) {
+    if (!cluster || it.s >= clusterEnd) { if (cluster) clusters.push(cluster); cluster = [it]; clusterEnd = it.e; }
+    else { cluster.push(it); clusterEnd = Math.max(clusterEnd, it.e); }
+  }
+  if (cluster) clusters.push(cluster);
+  clusters.forEach(function(cl){
+    const lanes = [];
+    cl.forEach(function(it){
+      let placed = false;
+      for (let i=0;i<lanes.length;i++){
+        if (it.s >= lanes[i]) { lanes[i] = it.e; res[it.key] = { lane:i }; placed = true; break; }
+      }
+      if (!placed) { res[it.key] = { lane:lanes.length }; lanes.push(it.e); }
+    });
+    const n = lanes.length;
+    cl.forEach(function(it){
+      const l = res[it.key].lane;
+      res[it.key].left = (l/n*100);
+      res[it.key].width = (100/n);
+    });
+  });
+  return res;
+}
+function occKey(ev, occ) { return ev.id + '|' + occ; }
+function findOccurrence(key) {
+  if (!key) return null;
+  const i = key.lastIndexOf('|');
+  if (i === -1) return null;
+  const id = key.slice(0, i), occ = key.slice(i+1);
+  const ev = events.find(e => e.id === id);
+  if (!ev) return null;
+  return { ev:ev, occ:occ };
+}
+// All-day events are rendered in an "all day" strip above the grid so the
+// holiday layer (and any all-day event) is visible in week/day/custom.
+function allDayStripHtml(occ, all) {
+  const list = all.filter(x => x.occ === occ && x.ev.allDay);
+  if (!list.length) return '';
+  let h = '<div class="allday-strip">';
+  list.forEach(function(x){
+    const c = calForEvent(x.ev);
+    h += '<div class="allday-chip' + ((c && c.colorMode==='calendar') ? ' calmode' : ' ' + (x.ev.color||'')) + '"'
+      + ' style="' + ((c && c.colorMode==='calendar') ? ('background:'+c.color+';color:#080c10;') : '') + 'border-left:3px solid ' + (c?c.color:COLOR_HEX['ev-green']) + '"'
+      + ' onclick="showDetail(event,\'' + x.ev.id + '\',\'' + x.occ + '\')">'
+      + esc(x.ev.title) + '</div>';
+  });
+  return h + '</div>';
+}
+function dutyHeaderTag(ds) {
+  const m = dutyModes[ds];
+  if (!m || m === 'NORMAL') return '';
+  return '<div class="duty-mode" style="color:' + (DUTY_COLOR[m]||'var(--accent)') + '">' + esc(m) + '</div>';
+}
+
+function renderWeek() {
+  // BUG-6: the scroll position is captured by setView()/navPrev()/navNext()
+  // BEFORE the view changes, and kept current by the grid's scroll listener.
+  // Capturing here would read the OUTGOING view's DOM under the incoming view's
+  // name and clobber the remembered position.
+  const mv = document.getElementById('mainView');
+  document.documentElement.style.setProperty('--ncols', '7');
+  const ws = wkStart(cursor);
+  const cols = Array.from({length:7},(_,i)=> addDays(ws,i));
+  const all = expandRange(dateStr(cols[0]), dateStr(cols[6]));
+  let h = '<div class="week-view"><div class="week-header-row"><div></div>';
+  cols.forEach(function(d){
+    const ds = dateStr(d), isT = ds === todayStr();
+    h += '<div class="week-header-cell' + (isT?' today':'') + '" ondblclick="cycleDuty(\'' + ds + '\')">'
+       + '<div class="dow">' + DAYS[d.getDay()] + '</div>'
+       + '<div class="wdate" onclick="goDay(\'' + ds + '\')">' + d.getDate() + '</div>'
+       + dutyHeaderTag(ds) + '</div>';
+  });
+        // JARVIS 2026-11-09 — ALL-DAY ROW ALIGNMENT FIX.
+      // The header row above emits a gutter <div></div> before its 7 day cells,
+      // so the grid has 8 tracks (34px gutter + 7 days). This row emitted only
+      // the 7 day cells with no gutter placeholder, so every all-day chip sat
+      // one column LEFT of its real day (Veterans Day on Wed displayed under
+      // Sat on a narrow phone). The gutter cell is emitted first now, matching
+      // the header row exactly.
+      h += '</div><div class="week-allday-row"><div></div>' + cols.map(function(d){ return '<div>' + allDayStripHtml(dateStr(d), all) + '</div>'; }).join('') + '</div>';
+  h += '<div class="week-time-grid"><div class="time-labels">';
+  for (let i=0;i<24;i++) h += '<div class="time-label">' + (i===0?'':fmtHourLbl(i)) + '</div>';
+  h += '</div>';
+  cols.forEach(function(d){
+    const ds = dateStr(d), isT = ds === todayStr();
+    h += '<div class="week-day-col" onclick="colClick(\'' + ds + '\',event)">';
+    for (let i=0;i<24;i++) h += '<div class="hour-line"></div>';
+    const dayEvs = all.filter(x => x.occ === ds && !x.ev.allDay);
+    const lay = layoutOverlap(dayEvs);
+    dayEvs.forEach(function(x){
+      const csT = x.cs || x.ev.start, ceT = x.ce || x.ev.end;
+      const top = minuteOf(csT)/60*HOUR_PX;
+      const ht  = Math.max((minuteOf(ceT)-minuteOf(csT))/60*HOUR_PX, 8);
+      const rm  = (x.ev.recurrence && x.ev.recurrence!=='none') ? '\u21bb ' : '';
+      const L   = lay[occKey(x.ev,x.occ)] || {left:0,width:100};
+      const c   = calForEvent(x.ev);
+      const isCalMode = c && c.colorMode === 'calendar';
+      h += '<div class="week-event ' + (isCalMode ? '' : (x.ev.color||'')) + '"'
+        + ' style="top:' + top + 'px;height:' + ht + 'px;left:calc(' + L.left + '% + 1px);width:calc(' + L.width + '% - 2px);right:auto;'
+        + (isCalMode ? ('background:' + c.color + ';color:#080c10;') : '') + '"'
+        + ' onclick="showDetail(event,\'' + x.ev.id + '\',\'' + x.occ + '\')">'
+        + '<span class="cal-stripe" style="' + calStripeStyle(x.ev) + '"></span>'
+        + '<div class="ev-time">' + fmtTime(csT) + '\u2013' + fmtTime(ceT) + '</div>'
+        + '<div class="ev-name">' + rm + esc(x.ev.title) + '</div></div>';
+    });
+    if (isT) { const n = new Date(), p = (n.getHours()*60+n.getMinutes())/60*HOUR_PX; h += '<div class="now-line" style="top:' + p + 'px"></div>'; }
+    h += '</div>';
+  });
+  mv.innerHTML = h + '</div></div>';
+  applyGridScroll();          // BUG-7: same task as the write — no paint-then-jump
+}
+
+function renderDay() {
+  const mv = document.getElementById('mainView');
+  const ds = dateStr(cursor), isT = ds === todayStr();
+  const all = expandRange(ds,ds);
+  let h = '<div class="day-view"><div class="day-header' + (isT?' today':'') + '" ondblclick="cycleDuty(\'' + ds + '\')">'
+        + '<div class="dow">' + DAYS[cursor.getDay()] + '</div>'
+        + '<div class="ddate">' + String(cursor.getDate()).padStart(2,'0') + '</div>'
+        + dutyHeaderTag(ds) + '</div>';
+  // JARVIS 2026-11-09: the single-column override is scoped to the class instead
+  // of a bare 1fr, so the day view uses the same gutter as its time grid and the
+  // all-day chip lines up under its day column.
+  h += '<div class="week-allday-row allday-single"><div>' + allDayStripHtml(ds, all) + '</div></div>';
+  h += '<div class="day-time-grid"><div class="time-labels">';
+  for (let i=0;i<24;i++) h += '<div class="time-label">' + (i===0?'':fmtHourLbl(i)) + '</div>';
+  h += '</div><div class="day-col" onclick="colClick(\'' + ds + '\',event)">';
+  for (let i=0;i<24;i++) h += '<div class="hour-line"></div>';
+  const dayEvs = all.filter(x => x.occ === ds && !x.ev.allDay);
+  const lay = layoutOverlap(dayEvs);
+  dayEvs.forEach(function(x){
+    const csT = x.cs || x.ev.start, ceT = x.ce || x.ev.end;
+    const top = minuteOf(csT)/60*HOUR_PX;
+    const ht  = Math.max((minuteOf(ceT)-minuteOf(csT))/60*HOUR_PX, 8);
+    const rm  = (x.ev.recurrence && x.ev.recurrence!=='none') ? '\u21bb ' : '';
+    const L   = lay[occKey(x.ev,x.occ)] || {left:0,width:100};
+    const c   = calForEvent(x.ev);
+    const isCalMode = c && c.colorMode === 'calendar';
+    h += '<div class="day-event ' + (isCalMode ? '' : (x.ev.color||'')) + '"'
+      + ' style="top:' + top + 'px;height:' + ht + 'px;left:calc(' + L.left + '% + 2px);width:calc(' + L.width + '% - 4px);right:auto;'
+      + (isCalMode ? ('background:' + c.color + ';color:#080c10;') : '') + '"'
+      + ' onclick="showDetail(event,\'' + x.ev.id + '\',\'' + x.occ + '\')">'
+      + '<span class="cal-stripe" style="' + calStripeStyle(x.ev) + '"></span>'
+      + '<strong>' + fmtTime(csT) + '\u2013' + fmtTime(ceT) + '</strong><br>' + rm + esc(x.ev.title) + '</div>';
+  });
+  if (isT) { const n = new Date(), p = (n.getHours()*60+n.getMinutes())/60*HOUR_PX; h += '<div class="now-line" style="top:' + p + 'px"></div>'; }
+  mv.innerHTML = h + '</div></div></div>';
+  applyGridScroll();
+}
+
+function renderMonth() {
+  const mv = document.getElementById('mainView');
+  const yr = cursor.getFullYear(), mo = cursor.getMonth();
+  const off = (new Date(yr, mo, 1).getDay()+6)%7;   // Monday-first offset
+  const sd = dateStr(new Date(yr,mo,1-off)), ed = dateStr(new Date(yr,mo,42-off));
+  const all = expandRange(sd, ed);
+  const paySet = new Set(paydaysForYear(yr).map(p=>p.date).concat(paydaysForYear(yr+1).map(p=>p.date)));
+  let h = '<div class="month-view"><div class="month-dow-header">' + WDAYS.map(d=>'<div>'+d+'</div>').join('') + '</div><div class="month-grid">';
+  for (let i=0;i<42;i++) {
+    const cd = new Date(yr,mo,1-off+i), ds = dateStr(cd);
+    const isT = ds === todayStr(), isO = cd.getMonth() !== mo;
+    const duty = dutyModes[ds];
+    h += '<div class="month-cell' + (isO?' other-month':'') + (isT?' today':'') + '" onclick="cellClick(\'' + ds + '\',event)">';
+    if (duty && duty !== 'NORMAL') h += '<div class="duty-tag" style="color:' + (DUTY_COLOR[duty]||'var(--text3)') + '">' + esc(duty) + '</div>';
+    h += '<div class="day-num"><span>' + cd.getDate() + '</span></div>';
+    const dayEvs = all.filter(x => x.occ === ds);
+    // parity #52 + the 4-chip cap and the "+N more" chip from v3 (B6).
+    dayEvs.slice(0,4).forEach(function(x){
+      const rm = (x.ev.recurrence && x.ev.recurrence!=='none') ? '\u21bb ' : '';
+      const c  = calForEvent(x.ev);
+      const isCalMode = c && c.colorMode === 'calendar';
+      h += '<div class="month-event ' + (isCalMode ? '' : (x.ev.color||'')) + '"'
+        + ' style="border-left:3px solid ' + (c?c.color:COLOR_HEX['ev-green']) + ';' + (isCalMode ? ('background:'+c.color+';color:#080c10;') : '') + '"'
+        + ' onclick="showDetail(event,\'' + x.ev.id + '\',\'' + x.occ + '\')">'
+        + rm + (x.ev.allDay ? '' : fmtTime(x.cs||x.ev.start) + '\u2013' + fmtTime(x.ce||x.ev.end) + ' ') + esc(x.ev.title) + '</div>';
+    });
+    const hidden = dayEvs.length - 4;
+    if (hidden > 0) h += '<div class="month-more" onclick="event.stopPropagation();goDay(\'' + ds + '\')">+' + hidden + ' more</div>';
+    if (paySet.has(ds)) {
+      h += '<div class="month-payday" onclick="event.stopPropagation();showPayday(event,\'' + ds + '\')">&#9679; PAYDAY</div>';
+    }
+    h += '</div>';
+  }
+  mv.innerHTML = h + '</div></div>';
+}
+
+function renderCustom() {
+  const mv = document.getElementById('mainView');
+  if (!customDays.length) {
+    mv.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-family:var(--mono);font-size:12px;letter-spacing:1px;text-align:center;padding:20px">NO DAYS SELECTED \u2014 USE THE \u2699 BUTTON TO CONFIGURE</div>';
+    return;
+  }
+  const sorted = customDays.slice().sort((a,b)=>a-b);
+  const anchor = new Date(cursor);
+  const diff = (anchor.getDay() - sorted[0] + 7) % 7;
+  anchor.setDate(anchor.getDate() - diff);
+  const cols = sorted.map(function(d){
+    const cd = new Date(anchor);
+    cd.setDate(anchor.getDate() + ((d - sorted[0] + 7) % 7));
+    return cd;
+  });
+  const colCount = cols.length;
+  // BUG-12: the column count lives in a CSS variable so media queries can still
+  // own the gutter — no inline grid-template-columns to shadow them.
+  document.documentElement.style.setProperty('--ncols', String(colCount));
+  const startDs = dateStr(cols[0]), endDs = dateStr(cols[cols.length-1]);
+  const all = expandRange(startDs, endDs);
+  let h = '<div class="week-view"><div class="week-header-row"><div></div>';
+  cols.forEach(function(d){
+    const ds = dateStr(d), isT = ds === todayStr();
+    h += '<div class="week-header-cell' + (isT?' today':'') + '" ondblclick="cycleDuty(\'' + ds + '\')">'
+      + '<div class="dow">' + DAYS[d.getDay()] + '</div>'
+      + '<div class="wdate" onclick="goDay(\'' + ds + '\')">' + d.getDate() + '</div>'
+      + dutyHeaderTag(ds) + '</div>';
+  });
+        // JARVIS 2026-11-09 — ALL-DAY ROW ALIGNMENT FIX.
+      // The header row above emits a gutter <div></div> before its 7 day cells,
+      // so the grid has 8 tracks (34px gutter + 7 days). This row emitted only
+      // the 7 day cells with no gutter placeholder, so every all-day chip sat
+      // one column LEFT of its real day (Veterans Day on Wed displayed under
+      // Sat on a narrow phone). The gutter cell is emitted first now, matching
+      // the header row exactly.
+      h += '</div><div class="week-allday-row"><div></div>' + cols.map(function(d){ return '<div>' + allDayStripHtml(dateStr(d), all) + '</div>'; }).join('') + '</div>';
+  h += '<div class="week-time-grid"><div class="time-labels">';
+  for (let i=0;i<24;i++) h += '<div class="time-label">' + (i===0?'':fmtHourLbl(i)) + '</div>';
+  h += '</div>';
+  cols.forEach(function(d){
+    const ds = dateStr(d), isT = ds === todayStr();
+    h += '<div class="week-day-col" onclick="colClick(\'' + ds + '\',event)">';
+    for (let i=0;i<24;i++) h += '<div class="hour-line"></div>';
+    const dayEvs = all.filter(x => x.occ === ds && !x.ev.allDay);
+    const lay = layoutOverlap(dayEvs);
+    dayEvs.forEach(function(x){
+      const csT = x.cs || x.ev.start, ceT = x.ce || x.ev.end;
+      const top = minuteOf(csT)/60*HOUR_PX;
+      const ht  = Math.max((minuteOf(ceT)-minuteOf(csT))/60*HOUR_PX, 8);
+      const rm  = (x.ev.recurrence && x.ev.recurrence!=='none') ? '\u21bb ' : '';
+      const L   = lay[occKey(x.ev,x.occ)] || {left:0,width:100};
+      const c   = calForEvent(x.ev);
+      const isCalMode = c && c.colorMode === 'calendar';
+      h += '<div class="week-event ' + (isCalMode ? '' : (x.ev.color||'')) + '"'
+        + ' style="top:' + top + 'px;height:' + ht + 'px;left:calc(' + L.left + '% + 1px);width:calc(' + L.width + '% - 2px);right:auto;'
+        + (isCalMode ? ('background:' + c.color + ';color:#080c10;') : '') + '"'
+        + ' onclick="showDetail(event,\'' + x.ev.id + '\',\'' + x.occ + '\')">'
+        + '<span class="cal-stripe" style="' + calStripeStyle(x.ev) + '"></span>'
+        + '<div class="ev-time">' + fmtTime(csT) + '\u2013' + fmtTime(ceT) + '</div>'
+        + '<div class="ev-name">' + rm + esc(x.ev.title) + '</div></div>';
+    });
+    if (isT) { const n = new Date(), p = (n.getHours()*60+n.getMinutes())/60*HOUR_PX; h += '<div class="now-line" style="top:' + p + 'px"></div>'; }
+    h += '</div>';
+  });
+  mv.innerHTML = h + '</div></div>';
+  applyGridScroll();
+}
+
+function renderMini() {
+  const y = miniCursor.getFullYear(), m = miniCursor.getMonth();
+  const off = (new Date(y,m,1).getDay()+6)%7;
+  let h = '<div class="mini-header"><button class="mini-nav" onclick="miniPrev()">&#8249;</button><span class="mini-month">' + MONTHS[m].slice(0,3).toUpperCase() + ' ' + y + '</span><button class="mini-nav" onclick="miniNext()">&#8250;</button></div>';
+  h += '<table class="mini-grid"><thead><tr>' + WDAYS.map(d=>'<th>'+d[0]+'</th>').join('') + '</tr></thead><tbody>';
+  let day = 1-off;
+  for (let r=0;r<6;r++){
+    h += '<tr>';
+    for (let c=0;c<7;c++){
+      const cd = new Date(y,m,day), ds = dateStr(cd);
+      const isT = ds===todayStr(), isSel = ds===dateStr(cursor), isO = cd.getMonth()!==m;
+      h += '<td class="' + (isT?'today ':'') + (isSel?'selected ':'') + (isO?'other-month':'') + '" onclick="miniClick(\'' + ds + '\')"><span>' + cd.getDate() + '</span></td>';
+      day++;
+    }
+    h += '</tr>';
+  }
+  document.getElementById('miniCal').innerHTML = h + '</tbody></table>';
+}
+
+// ---- NAVIGATION (parity #12-#17) ----
+function setView(v) {
+  if (v === view) { render(); return; }
+  captureScrollTop();            // BUG-6: keep the outgoing view's position
+  view = v;
+  if (v !== 'custom') document.documentElement.style.setProperty('--ncols', '7');
+  render();                      // no scrollPinned here — the per-view memory wins
+}
+function goToday(){ today = new Date(); cursor = new Date(today); miniCursor = new Date(today); scrollPinned = true; render(); }
+function navPrev(){
+  if (view==='month') cursor.setMonth(cursor.getMonth()-1);
+  else if (view==='week'||view==='custom') cursor.setDate(cursor.getDate()-7);
+  else cursor.setDate(cursor.getDate()-1);
+  miniCursor = new Date(cursor); scrollPinned = true; render();
+}
+function navNext(){
+  captureScrollTop();
+  if (view==='month') cursor.setMonth(cursor.getMonth()+1);
+  else if (view==='week'||view==='custom') cursor.setDate(cursor.getDate()+7);
+  else cursor.setDate(cursor.getDate()+1);
+  miniCursor = new Date(cursor); scrollPinned = true; render();
+}
+function miniPrev(){ miniCursor.setMonth(miniCursor.getMonth()-1); renderMini(); }
+function miniNext(){ miniCursor.setMonth(miniCursor.getMonth()+1); renderMini(); }
+function miniClick(ds){ cursor = parseLocal(ds); miniCursor = new Date(cursor); scrollPinned = true; render(); }
+function goDay(ds){ cursor = parseLocal(ds); view = 'day'; scrollPinned = true; render(); }
+
+// ---- SIDEBAR DRAWER (mobile) ----
+function toggleSidebar(force){
+  const sb = document.getElementById('sidebar'), bd = document.getElementById('sidebarBackdrop');
+  if (!sb) return;
+  const open = (force === undefined) ? !sb.classList.contains('open') : !!force;
+  sb.classList.toggle('open', open);
+  if (bd) bd.classList.toggle('open', open);
+}
+function syncSidebarButton(){
+  const b = document.getElementById('btnSidebar');
+  if (b) b.style.display = (window.innerWidth <= 820) ? '' : 'none';
+}
+window.addEventListener('resize', syncSidebarButton);
+
+// ---- INTERACTIONS (parity #22, #23) ----
+function cellClick(ds,e){
+  if (e.target.closest('.month-event, .month-more, .month-payday')) return;
+  openNewEvent(ds);
+}
+function colClick(ds,e){
+  if (e.target.closest('.week-event, .day-event, .allday-chip')) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const hr = Math.floor((e.clientY - rect.top)/HOUR_PX);
+  // v2 produced a zero-length 23:00-23:00 event here; the start is capped at 22:00.
+  const sh = Math.min(Math.max(hr,0),22), eh = Math.min(sh+1,23);
+  openNewEvent(ds, String(sh).padStart(2,'0')+':00', String(eh).padStart(2,'0')+':00');
+}
+function toast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:200;background:var(--surface);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:9px 16px;border-radius:3px;box-shadow:0 8px 30px rgba(0,0,0,.7)';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.style.display = 'none'; }, 2200);
+}
+
+// ---- EDIT STATE ----
+let miniCursor = new Date(today);
+let editingId = null,  editingOcc = null;
+let detailId  = null,  detailOcc  = null;
+let selRecur  = 'none';
+let selWeeklyDays = [];
+let pendingAct = null, pendingDat = null, pendingMoveKind = null;
+let pendingCalDelete = null, newCalColor = PALETTE[3], newCalMode = 'category';
+
+// ---- FIRST-RUN HINT / STORAGE BANNER / BACKUP NUDGE ----
+function maybeShowHint(){
+  const h = document.getElementById('firstRunHint');
+  if (!h) return;
+  if (localStorage.getItem('chrono_hint_dismissed')) return;
+  h.classList.add('open');
+}
+function dismissHint(){
+  localStorage.setItem('chrono_hint_dismissed','1');
+  const h = document.getElementById('firstRunHint');
+  if (h) h.classList.remove('open');
+}
+function maybeShowStorageBanner(){
+  if (!storageCorrupt) return;
+  const b = document.getElementById('storageBanner');
+  if (b) b.classList.add('open');
+}
+function startFresh(){
+  localStorage.removeItem('chrono_v2_events');
+  localStorage.removeItem('chrono_v2_exceptions');
+  localStorage.removeItem('chrono_seeded_' + SEED_VERSION);
+  location.reload();
+}
+function restoreBackupFile(){ openImportDialog(); }
+// MEM-0: if no export has been taken in 30 days, show a small dismissible nudge.
+function maybeShowBackupNudge(){
+  const el = document.getElementById('backupNudge');
+  if (!el) return;
+  if (localStorage.getItem('chrono_backup_nudge_dismissed') === dateStr(new Date())) return;
+  const last = localStorage.getItem('chrono_last_export');
+  const due = !last || (Date.now() - new Date(last).getTime()) > 30*864e5;
+  if (due) el.classList.add('open');
+}
+function dismissBackupNudge(e){
+  if (e) e.stopPropagation();
+  localStorage.setItem('chrono_backup_nudge_dismissed', dateStr(new Date()));
+  const el = document.getElementById('backupNudge');
+  if (el) el.classList.remove('open');
+}
+
+// ============================================================================
+// EVENT MODAL (parity #18-#38, plus the additive Calendar + Link fields)
+// ============================================================================
+function setRecur(el){
+  document.querySelectorAll('.recur-opt').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); selRecur = el.dataset.r;
+  document.getElementById('recurEndRow').classList.toggle('show', selRecur!=='none');
+  const isWeekly = selRecur === 'weekly';
+  document.getElementById('weeklyDaysRow').classList.toggle('show', isWeekly);
+  if (isWeekly && selWeeklyDays.length === 0) {
+    const dateVal = document.getElementById('evDate').value;
+    if (dateVal) selWeeklyDays = [parseLocal(dateVal).getDay()];
+    syncWeeklyDayBtns();
+  }
+}
+function syncWeeklyDayBtns(){
+  document.querySelectorAll('.weekly-day-btn').forEach(function(b){
+    b.classList.toggle('active', selWeeklyDays.indexOf(parseInt(b.dataset.wd,10)) !== -1);
+  });
+}
+document.addEventListener('click', function(e){
+  const btn = e.target.closest && e.target.closest('.weekly-day-btn');
+  if (!btn) return;
+  const wd = parseInt(btn.dataset.wd,10);
+  if (selWeeklyDays.indexOf(wd) !== -1) {
+    if (selWeeklyDays.length === 1) return;      // keep at least one day
+    selWeeklyDays = selWeeklyDays.filter(x => x !== wd);
+  } else selWeeklyDays.push(wd);
+  syncWeeklyDayBtns();
+});
+// The Calendar picker lists every writable calendar (parity #28-#38, additive).
+function fillCalendarPicker(sel) {
+  const el = document.getElementById('evCalendar');
+  if (!el) return;
+  const sorted = calendars.slice().sort((a,b)=> (a.order-b.order) || a.name.localeCompare(b.name));
+  el.innerHTML = sorted.map(function(c){
+    return '<option value="' + c.id + '"' + (c.readOnly ? ' data-ro="1"' : '') + '>' + esc(c.name) + (c.readOnly ? ' (locked)' : '') + '</option>';
+  }).join('');
+  el.value = sel || 'cal_default';
+  onEventCalendarChange();
+}
+function onEventCalendarChange(){
+  const el = document.getElementById('evCalendar');
+  const bar = document.getElementById('calLockNote');
+  if (!el || !bar) return;
+  const c = calById(el.value);
+  bar.textContent = (c && c.readOnly) ? 'LOCKED — press SAVE to unlock this calendar and edit it' : '';
+}
+function openNewEvent(ds, start, end){
+  editingId = null; editingOcc = null;
+  document.getElementById('modalTitle').textContent = '// NEW EVENT';
+  document.getElementById('evTitle').value = '';
+  document.getElementById('evDate').value = ds || dateStr(cursor);
+  document.getElementById('evAllDay').value = 'no';
+  document.getElementById('evStart').value = start || '09:00';
+  document.getElementById('evEnd').value = end || '10:00';
+  document.getElementById('evDesc').value = '';
+  document.getElementById('evRecurEnd').value = '';
+  document.getElementById('evLink').value = '';
+  document.getElementById('deleteBtn').style.display = 'none';
+  document.getElementById('timeRow').style.display = '';
+  const cb = document.querySelector('.recur-opt[data-r="none"]');
+  if (cb) setRecur(cb);
+  selRecur = 'none'; selWeeklyDays = [];
+  syncWeeklyDayBtns();
+  document.querySelectorAll('.cat-btn').forEach(function(b){ b.classList.remove('active'); b.style.borderColor=''; b.style.background=''; });
+  const defCat = document.querySelector('.cat-btn[data-cat=""]');
+  if (defCat) pickCat(defCat);
+  fillCalendarPicker(lastNewEventCalendar());
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(function(){ document.getElementById('evTitle').focus(); }, 50);
+}
+function lastNewEventCalendar(){
+  try { return localStorage.getItem('chrono_last_calendar') || 'cal_default'; } catch (e) { return 'cal_default'; }
+}
+function openEditEvent(id, occ){
+  const ev = events.find(e => e.id === id); if (!ev) return;
+  editingId = id; editingOcc = occ || ev.date;
+  document.getElementById('modalTitle').textContent = '// EDIT EVENT';
+  document.getElementById('evTitle').value = ev.title;
+  document.getElementById('evDate').value = occ || ev.date;
+  document.getElementById('evAllDay').value = ev.allDay ? 'yes' : 'no';
+  document.getElementById('evStart').value = ev.start || '09:00';
+  document.getElementById('evEnd').value = ev.end || '10:00';
+  document.getElementById('evDesc').value = ev.desc || '';
+  document.getElementById('evRecurEnd').value = ev.recurrenceEnd || '';
+  document.getElementById('evLink').value = ev.link || '';
+  document.getElementById('deleteBtn').style.display = '';
+  document.getElementById('timeRow').style.display = ev.allDay ? 'none' : '';
+  document.querySelectorAll('.recur-opt').forEach(b=>b.classList.remove('active'));
+  const ro = document.querySelector('.recur-opt[data-r="' + (ev.recurrence||'none') + '"]');
+  if (ro) ro.classList.add('active');
+  selRecur = ev.recurrence || 'none';
+  selWeeklyDays = (selRecur==='weekly' && ev.weeklyDays && ev.weeklyDays.length) ? ev.weeklyDays.slice() : [];
+  if (selRecur === 'weekly' && selWeeklyDays.length === 0) selWeeklyDays = [parseLocal(occ||ev.date).getDay()];
+  syncWeeklyDayBtns();
+  document.getElementById('weeklyDaysRow').classList.toggle('show', selRecur==='weekly');
+  document.getElementById('recurEndRow').classList.toggle('show', selRecur!=='none');
+  document.querySelectorAll('.cat-btn').forEach(function(b){ b.classList.remove('active'); b.style.borderColor=''; b.style.background=''; });
+  const catBtn = document.querySelector('.cat-btn[data-cat="' + (ev.color||'') + '"]');
+  if (catBtn) pickCat(catBtn);
+  fillCalendarPicker(ev.calendarId || 'cal_default');
+  if (ev.generated && ev.holidayKey) {
+    const c = calById(ev.calendarId);
+    if (c && c.readOnly) document.getElementById('calLockNote').textContent = 'THIS IS A GENERATED HOLIDAY — press SAVE once to unlock the calendar, then edit freely';
+  }
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOverlay(e){ if (e.target === document.getElementById('modalOverlay')) closeModal(); }
+function toggleTime(){ document.getElementById('timeRow').style.display = document.getElementById('evAllDay').value === 'yes' ? 'none' : ''; }
+function pickCat(el){
+  document.querySelectorAll('.cat-btn').forEach(function(b){ b.classList.remove('active'); b.style.borderColor=''; b.style.background=''; });
+  el.classList.add('active');
+  el.style.borderColor = el.dataset.hex;
+  el.style.background  = el.dataset.hex + '22';
+}
+function collectForm(){
+  const allDay = document.getElementById('evAllDay').value === 'yes';
+  const act = document.querySelector('.cat-btn.active');
+  const calEl = document.getElementById('evCalendar');
+  return {
+    title: document.getElementById('evTitle').value.trim(),
+    date: document.getElementById('evDate').value,
+    allDay: allDay,
+    start: allDay ? '00:00' : document.getElementById('evStart').value,
+    end:   allDay ? '23:59' : document.getElementById('evEnd').value,
+    desc: document.getElementById('evDesc').value.trim(),
+    color: act ? (act.dataset.cat || '') : '',
+    recurrence: selRecur,
+    recurrenceEnd: selRecur !== 'none' ? (document.getElementById('evRecurEnd').value || '') : '',
+    weeklyDays: selRecur === 'weekly' ? selWeeklyDays.slice().sort((a,b)=>a-b) : [],
+    calendarId: calEl ? calEl.value : 'cal_default',
+    link: safeUrl(document.getElementById('evLink').value)
+  };
+}
+function commitNewEvent(data) {
+  const ev = Object.assign({ id: uid() }, data);
+  events.push(ev);
+  return ev;
+}
+
+function saveEvent(){
+  const data = collectForm();
+  if (!data.title) { document.getElementById('evTitle').focus(); return; }
+
+  // HOL-5 — editing anything on a read-only calendar (a generated holiday)
+  // unlocks that calendar permanently, and freezes the edited event so the
+  // generator never overwrites it.
+  const target = calById(data.calendarId);
+  if (target && target.readOnly) {
+    pushHistory();
+    target.readOnly = false;
+    if (editingId) {
+      const ev0 = events.find(e => e.id === editingId);
+      if (ev0 && ev0.generated) ev0.generated = false;
+    }
+    toast('UNLOCKED ' + target.name);
+    applyFormSave(data, true);
+    return;
+  }
+  applyFormSave(data, false);
+}
+function applyFormSave(data, alreadyPushed){
+  const push = alreadyPushed ? function(){} : pushHistory;
+  if (!editingId) {
+    push();
+    commitNewEvent(data);
+    try { localStorage.setItem('chrono_last_calendar', data.calendarId); } catch (e) {}
+    saveAll(); closeModal(); render(); return;
+  }
+  const ev = events.find(e => e.id === editingId);
+  if (!ev) { closeModal(); return; }
+  const wasGenerated = !!ev.generated;
+  if (!ev.recurrence || ev.recurrence === 'none') {
+    push();
+    Object.assign(ev, data);
+    if (wasGenerated) ev.generated = false;      // an edit freezes a generated event
+    saveAll(); closeModal(); render(); return;
+  }
+  pendingAct = 'save'; pendingDat = data; closeModal();
+  const r = document.querySelector('input[name=recurScope][value="this"]');
+  if (r) r.checked = true;
+  document.getElementById('recurDialog').classList.add('open');
+}
+function onDeleteClick(){
+  if (!editingId) return;
+  const ev = events.find(e => e.id === editingId);
+  if (!ev) return;
+  if (!ev.recurrence || ev.recurrence === 'none') { deleteEventNow(ev); return; }
+  pendingAct = 'delete'; pendingDat = null; closeModal();
+  const r = document.querySelector('input[name=recurScope][value="this"]');
+  if (r) r.checked = true;
+  document.getElementById('recurDialog').classList.add('open');
+}
+// Deleting an event that carries a holidayKey suppresses that key forever.
+function suppressIfHoliday(ev) {
+  if (!ev || !ev.holidayKey) return;
+  const c = calById(ev.calendarId);
+  if (!c) return;
+  if (!Array.isArray(c.suppressed)) c.suppressed = [];
+  if (c.suppressed.indexOf(ev.holidayKey) === -1) c.suppressed.push(ev.holidayKey);
+}
+function deleteEventNow(ev){
+  pushHistory();
+  suppressIfHoliday(ev);
+  events = events.filter(e => e.id !== ev.id);
+  delete exceptions[ev.id];
+  sweepOrphanStrays();
+  saveAll(); closeDetail(); render();
+}
+function closeRecurDialog(){
+  document.getElementById('recurDialog').classList.remove('open');
+  pendingAct = null; pendingDat = null; pendingMoveKind = null;
+}
+// "This occurrence only" spawns are stamped with seriesOf/seriesDate so a later
+// series delete sweeps them (v2 left them behind forever).
+function seriesStrays(seriesId, occDate) {
+  events = events.filter(function(e){
+    if (e.seriesOf !== seriesId) return true;
+    if (occDate === undefined || occDate === null) return false;
+    return e.seriesDate !== occDate;
+  });
+}
+function sweepOrphanStrays() {
+  const ids = new Set(events.filter(e => !e.seriesOf).map(e => e.id));
+  events = events.filter(e => !e.seriesOf || ids.has(e.seriesOf));
+}
+// H-2 — FROM THIS DATE FORWARD: the old series ends the day before the chosen
+// date (via an end date) and a new series starts on it.
+function splitForward(ev, data, occ){
+  const original = Object.assign({}, ev);
+  const prev = addDaysStr(occ, -1);
+  ev.recurrenceEnd = prev;
+  const fresh = Object.assign({}, data, {
+    id: uid(),
+    date: occ,
+    recurrence: ev.recurrence,
+    recurrenceEnd: original.recurrenceEnd || '',
+    seriesOf: undefined,
+    seriesDate: undefined
+  });
+  delete fresh.seriesOf; delete fresh.seriesDate;
+  events.push(fresh);
+  return { frozen: original, createdId: fresh.id, endedOn: prev };
+}
+function applyForwardSplit(data){
+  const ev = events.find(e => e.id === editingId);
+  if (!ev) return;
+  splitForward(ev, data, editingOcc);
+  saveAll(); render();
+}
+function confirmRecurAction(){
+  const chk = document.querySelector('input[name=recurScope]:checked');
+  const scope = chk ? chk.value : 'this';
+  document.getElementById('recurDialog').classList.remove('open');
+  pushHistory();
+  if (pendingAct === 'delete') {
+    const ev = events.find(e => e.id === editingId);
+    if (ev) suppressIfHoliday(ev);
+    if (scope === 'all') {
+      events = events.filter(e => e.id !== editingId);
+      delete exceptions[editingId];
+      seriesStrays(editingId);
+    } else {
+      if (!exceptions[editingId]) exceptions[editingId] = [];
+      if (exceptions[editingId].indexOf(editingOcc) === -1) exceptions[editingId].push(editingOcc);
+      seriesStrays(editingId, editingOcc);
+    }
+    if (scope === 'forward') {
+      // "forward" on a delete means: stop the series at this date, keep the past.
+      const ev2 = events.find(e => e.id === editingId);
+      if (ev2) ev2.recurrenceEnd = addDaysStr(editingOcc, -1);
+    }
+  } else if (pendingAct === 'save') {
+    if (scope === 'all') {
+      const i = events.findIndex(e => e.id === editingId);
+      if (i >= 0) {
+        const wasGen = !!events[i].generated;
+        events[i] = Object.assign({}, events[i], pendingDat);
+        if (wasGen) events[i].generated = false;
+      }
+    } else if (scope === 'forward') {
+      applyForwardSplit(pendingDat);
+    } else {
+      seriesStrays(editingId, editingOcc);
+      if (!exceptions[editingId]) exceptions[editingId] = [];
+      if (exceptions[editingId].indexOf(editingOcc) === -1) exceptions[editingId].push(editingOcc);
+      events.push(Object.assign({}, pendingDat, {
+        id: uid(), recurrence:'none', recurrenceEnd:'',
+        seriesOf: editingId, seriesDate: editingOcc
+      }));
+    }
+  } else if (pendingAct === 'move') {
+    applyMoveAnswer(scope);
+  }
+  sweepOrphanStrays();
+  saveAll();
+  if (!(pendingAct === 'save' && scope === 'forward')) render();
+  pendingAct = null; pendingDat = null; pendingMoveKind = null;
+}
+
+// ============================================================================
+// MOVE AN EVENT — and the BUG-2 fix
+// BUG-2 (v3): shiftEvent wrote a new `date` onto a weekly event but left
+// weeklyDays alone. The weekly renderer matches on weeklyDays, so the move did
+// nothing visible AND the occurrence before the new date vanished.
+// The fix: move the RULE. Every entry of weeklyDays is rotated by days mod 7,
+// and the past is preserved by ending the old series on the occurrence you moved
+// from while a new series carries the rotated rule from the moved-to date.
+// DAILY / MONTHLY / YEARLY paths keep the plain date move. A +15M shift never
+// touches weeklyDays at all.
+// ============================================================================
+function rotateWeeklyDays(days, delta) {
+  return days.map(function(d){ return (((d + delta) % 7) + 7) % 7; }).sort(function(a,b){ return a-b; });
+}
+function splitSeriesForMove(ev, occ, data) {
+  // The old series keeps its old weekday up to and including the occurrence you
+  // moved from; the new series carries the rotated rule from the new date.
+  ev.recurrenceEnd = occ;
+  const fresh = Object.assign({}, data, {
+    id: uid(),
+    date: data.date || occ,
+    recurrence: ev.recurrence,
+    recurrenceEnd: '',
+    weeklyDays: data.weeklyDays
+  });
+  delete fresh.seriesOf; delete fresh.seriesDate;
+  events.push(fresh);
+  return fresh;
+}
+function shiftEvent(days, mins) {
+  if (!detailId) return;
+  const ev = events.find(e => e.id === detailId);
+  if (!ev) return;
+  const occ = detailOcc || ev.date;
+  const newOcc = shiftDateStr(occ, days);
+
+  const data = {
+    title: ev.title,
+    date: days !== 0 ? newOcc : ev.date,
+    allDay: ev.allDay,
+    start: ev.start,
+    end: ev.end,
+    desc: ev.desc,
+    color: ev.color,
+    recurrence: ev.recurrence,
+    recurrenceEnd: ev.recurrenceEnd || '',
+    weeklyDays: (ev.weeklyDays || []).slice(),
+    calendarId: ev.calendarId || 'cal_default',
+    link: ev.link || ''
+  };
+  // BUG-2: rotate the rule, not just the date.
+  if (days !== 0 && ev.recurrence === 'weekly' && data.weeklyDays.length) {
+    data.weeklyDays = rotateWeeklyDays(data.weeklyDays, ((days % 7) + 7) % 7);
+  }
+  if (mins !== 0 && !ev.allDay) {
+    data.start = shiftTimeStr(ev.start || '09:00', mins);
+    data.end   = shiftTimeStr(ev.end   || '10:00', mins);
+    // weeklyDays deliberately untouched by a time shift.
+  }
+
+  if (!ev.recurrence || ev.recurrence === 'none') {
+    pushHistory();
+    Object.assign(ev, data);
+    if (ev.generated) ev.generated = false;
+    saveAll(); closeDetail(); render();
+    toast('MOVED');
+    return;
+  }
+  // Recurring: ask the one question the app already asks.
+  editingId = ev.id; editingOcc = occ;
+  pendingAct = 'move';
+  pendingDat = data;
+  pendingMoveKind = days !== 0 ? 'day' : 'time';
+  closeDetail();
+  const r = document.querySelector('input[name=recurScope][value="this"]');
+  if (r) r.checked = true;
+  const box = document.getElementById('recurDialog');
+  const h4 = box.querySelector('h4');
+  if (h4) h4.textContent = pendingMoveKind === 'day' ? '// MOVE RECURRING EVENT' : '// RE-TIME RECURRING EVENT';
+  box.classList.add('open');
+}
+function applyMoveAnswer(scope) {
+  const ev = events.find(e => e.id === editingId);
+  if (!ev) return;
+  const occ = editingOcc || ev.date;
+  if (scope === 'all') {
+    const dayMove = pendingMoveKind === 'day' && pendingDat.date !== ev.date;
+    if (ev.recurrence === 'weekly' && ev.weeklyDays && ev.weeklyDays.length && dayMove) {
+      splitSeriesForMove(ev, occ, pendingDat);      // the BUG-2 fix
+    } else {
+      Object.assign(ev, pendingDat);
+      if (ev.generated) ev.generated = false;
+    }
+    render();
+  } else if (scope === 'forward') {
+    splitForward(ev, pendingDat, occ);
+    render();
+  } else {
+    seriesStrays(ev.id, occ);
+    if (!exceptions[ev.id]) exceptions[ev.id] = [];
+    if (exceptions[ev.id].indexOf(occ) === -1) exceptions[ev.id].push(occ);
+    events.push(Object.assign({}, pendingDat, {
+      id: uid(), recurrence:'none', recurrenceEnd:'',
+      seriesOf: ev.id, seriesDate: occ
+    }));
+    render();
+  }
+}
+
+// ============================================================================
+// DETAIL POPUP (parity #48-#51 + BUG-4 + the additive calendar / link rows)
+// BUG-4 fix: the popup scrolls (max-height + overflow-y) and it is placed by
+// MEASURING its real height instead of assuming 320px. Below 820px it becomes a
+// bottom sheet, per the spec.
+// ============================================================================
+function showDetail(e, id, occ){
+  if (e) e.stopPropagation();
+  const ev = events.find(x => x.id === id); if (!ev) return;
+  detailId = id; detailOcc = occ;
+  const cal = calForEvent(ev);
+  document.getElementById('detailTitle').textContent = ev.title;      // textContent: never innerHTML
+  document.getElementById('detailColorBar').style.background = renderedColour(ev);
+  document.getElementById('detailTime').textContent = ev.allDay
+    ? occ + '  \u00b7  ALL DAY'
+    : occ + '  \u00b7  ' + fmtTime(ev.start) + ' \u2014 ' + fmtTime(ev.end);
+  document.getElementById('detailRecur').textContent = recurLabel(ev) + (ev.generated ? '  \u00b7  GENERATED' : '');
+  document.getElementById('detailCal').innerHTML = ''
+    + '<span class="legend-dot" style="background:' + (cal ? cal.color : COLOR_HEX['ev-green']) + '"></span>'
+    + esc(cal ? cal.name : 'My Calendar')
+    + (dutyModes[occ] ? ('  \u00b7  DUTY: ' + esc(dutyModes[occ])) : '');
+  document.getElementById('detailCat').textContent = CAT_LABEL[ev.color || ''] ? '[ ' + CAT_LABEL[ev.color || ''] + ' ]' : '';
+  document.getElementById('detailDesc').textContent = ev.desc || '';
+  const link = safeUrl(ev.link);
+  document.getElementById('detailLinkRow').innerHTML = link
+    ? '<button class="move-edit-btn" onclick="openEventLink()">&#128279; OPEN LINK</button>' : '';
+  const p = document.getElementById('detailPopup');
+  p.classList.add('open');
+
+  const mobile = window.innerWidth <= 820;
+  if (mobile) return;                       // the bottom-sheet CSS owns placement
+  // Desktop: measure, then clamp inside the viewport.
+  p.style.left = '0px'; p.style.top = '0px';       // neutral origin for the measure
+  const pw = 280;
+  p.style.width = pw + 'px';
+  const ph = p.getBoundingClientRect().height;
+  const r  = e ? e.target.getBoundingClientRect() : {right:0, top:0};
+  let left = r.right + 10;
+  if (left + pw > window.innerWidth) left = Math.max(4, window.innerWidth - pw - 8);
+  p.style.left = Math.max(4, left) + 'px';
+  const maxTop = Math.max(8, window.innerHeight - ph - 8);
+  p.style.top = Math.min(Math.max(8, r.top), maxTop) + 'px';
+}
+function openEventLink(){
+  const ev = events.find(x => x.id === detailId);
+  if (!ev) return;
+  const u = safeUrl(ev.link);
+  if (!u) return;
+  window.open(u, '_blank', 'noopener');
+}
+function closeDetail(){
+  const p = document.getElementById('detailPopup');
+  if (p) p.classList.remove('open');
+  detailId = null; detailOcc = null;
+}
+function editFromDetail(){ const id = detailId, occ = detailOcc; closeDetail(); openEditEvent(id, occ); }
+function deleteFromDetail(){
+  const ev = events.find(x => x.id === detailId);
+  if (!ev) return;
+  if (!ev.recurrence || ev.recurrence === 'none') { deleteEventNow(ev); return; }
+  editingId = detailId; editingOcc = detailOcc; pendingAct = 'delete'; pendingDat = null; closeDetail();
+  const r = document.querySelector('input[name=recurScope][value="this"]');
+  if (r) r.checked = true;
+  document.getElementById('recurDialog').classList.add('open');
+}
+document.addEventListener('click', function(e){
+  const p = document.getElementById('detailPopup');
+  if (p && p.classList.contains('open') && !p.contains(e.target)) closeDetail();
+});
+// Escape closes the topmost layer (parity #64, extended to the v4 layers).
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('deleteCalDialog').classList.contains('open')) { cancelDeleteCalendar(); return; }
+  if (document.getElementById('importOverlay').classList.contains('open'))    { closeImportDialog(); return; }
+  if (document.getElementById('payDialog').classList.contains('open'))        { closePayDialog(); return; }
+  if (document.getElementById('detailPopup').classList.contains('open'))      { closeDetail(); return; }
+  if (document.getElementById('recurDialog').classList.contains('open'))      { closeRecurDialog(); return; }
+  if (document.getElementById('modalOverlay').classList.contains('open'))     { closeModal(); return; }
+  if (document.getElementById('customCfgOverlay').classList.contains('open')) { closeCustomCfg(); return; }
+  if (document.getElementById('calMgrOverlay').classList.contains('open'))    { closeCalendarManager(); return; }
+  toggleSidebar(false);
+});
+
+// ---- CUSTOM VIEW CONFIG (parity #8-#11) ----
+function openCustomCfg(){
+  document.querySelectorAll('.custom-day-btn').forEach(function(btn){
+    btn.classList.toggle('active', customDays.indexOf(parseInt(btn.dataset.d,10)) !== -1);
+  });
+  document.getElementById('customCfgOverlay').classList.add('open');
+}
+function closeCustomCfg(){ document.getElementById('customCfgOverlay').classList.remove('open'); }
+function closeCustomCfgOverlay(e){ if (e.target === document.getElementById('customCfgOverlay')) closeCustomCfg(); }
+document.querySelectorAll('.custom-day-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    const d = parseInt(btn.dataset.d,10);
+    if (customDays.indexOf(d) !== -1) {
+      if (customDays.length === 1) return;                 // keep at least one day
+      customDays = customDays.filter(x => x !== d);
+    } else customDays.push(d);
+    btn.classList.toggle('active', customDays.indexOf(d) !== -1);
+  });
+});
+function applyPreset(days){
+  customDays = days.slice();
+  document.querySelectorAll('.custom-day-btn').forEach(function(btn){
+    btn.classList.toggle('active', customDays.indexOf(parseInt(btn.dataset.d,10)) !== -1);
+  });
+}
+function saveCustomCfg(){
+  localStorage.setItem('chrono_custom_days', JSON.stringify(customDays));
+  closeCustomCfg();
+  if (view === 'custom') { scrollPinned = true; render(); }
+}
+
+// ============================================================================
+// CALENDAR MANAGER (§A.5, §A.9) — add / rename / recolour / hide / delete /
+// reorder / per-calendar export and import. Every operation is undoable.
+// ============================================================================
+function openCalendarManager(){
+  ensureHolidaysForCursor();               // B.2 — regenerate whenever it is opened
+  const pay = calById('cal_paydays');
+  if (pay) ensurePaydays(pay, [currentYear(), currentYear()+1]);
+  saveAll();
+  renderCalManagerList();
+  document.getElementById('calMgrOverlay').classList.add('open');
+  render();
+}
+function closeCalendarManager(){ document.getElementById('calMgrOverlay').classList.remove('open'); }
+function closeCalMgrOverlay(e){ if (e.target === document.getElementById('calMgrOverlay')) closeCalendarManager(); }
+function renderCalManagerList(){
+  const box = document.getElementById('calMgrList');
+  if (!box) return;
+  const sorted = calendars.slice().sort((a,b)=> (a.order-b.order) || a.name.localeCompare(b.name));
+  let h = '';
+  sorted.forEach(function(c, idx){
+    const count = events.filter(e => e.calendarId === c.id).length;
+    const dupes = calendars.filter(x => x.id !== c.id && x.name === c.name).length;
+    h += '<div class="cal-row" data-id="' + c.id + '">'
+      + '<span class="cal-handle" title="Reorder">&#8942;&#8942;</span>'
+      + '<input class="cal-row-input" style="padding:7px 10px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:var(--text);font-family:var(--mono);font-size:11px;outline:none"'
+      + ' value="' + esc(c.name) + '" maxlength="40" onchange="renameCalendar(\'' + c.id + '\', this.value)" />'
+      + '<button class="cal-row-btn" onclick="openRecolour(\'' + c.id + '\')" title="Recolour" style="border-color:' + c.color + ';color:' + c.color + '">&#9679;</button>'
+      + '<button class="cal-row-btn" onclick="toggleCalendarVisible(\'' + c.id + '\')" title="' + (c.visible ? 'Hide' : 'Show') + '">' + (c.visible ? '&#128065;' : '&#8212;') + '</button>'
+      + '<button class="cal-row-btn" onclick="moveCalendar(\'' + c.id + '\', -1)" title="Move up">&#9650;</button>'
+      + '<button class="cal-row-btn" onclick="moveCalendar(\'' + c.id + '\', 1)" title="Move down">&#9660;</button>'
+      + '<button class="cal-row-btn" onclick="exportSingleCalendar(\'' + c.id + '\')" title="Export this calendar">&#11015;</button>'
+      + '<button class="cal-row-btn" onclick="importIntoCalendar(\'' + c.id + '\')" title="Import into this calendar">&#11014;</button>'
+      + '<button class="cal-row-btn danger" onclick="askDeleteCalendar(\'' + c.id + '\')" title="' + (c.id === 'cal_default' ? 'this is your base calendar' : 'Delete') + '"'
+      + (c.id === 'cal_default' ? ' disabled' : '') + '>&#128465;</button>'
+      + '</div>'
+      + '<div class="cal-sub">'
+      + count + ' EVENT' + (count === 1 ? '' : 'S')
+      + ' \u00b7 ' + esc(c.colorMode === 'calendar' ? 'coloured by calendar' : 'coloured by category')
+      + (c.kind === 'holiday' ? ' \u00b7 generated (' + esc(c.holidaySet || 'holiday') + ')' : '')
+      + (c.readOnly ? ' \u00b7 LOCKED' : '')
+      + (c.kind === 'holiday' ? ' \u00b7 ' + ((c.suppressed||[]).length) + ' suppressed' : '')
+      + (dupes ? ' \u00b7 WARNING: another calendar has this name' : '')
+      + '</div>'
+      + '<div id="sw_' + c.id + '" class="swatches" style="display:none">'
+      + PALETTE.map(function(hex){ return '<button class="swatch' + (hex===c.color?' active':'') + '" style="background:' + hex + '" onclick="recolourCalendar(\'' + c.id + '\',\'' + hex + '\')" aria-label="' + hex + '"></button>'; }).join('')
+      + '</div>'
+      + '<div class="mode-toggle" style="flex:1 1 100%;margin-top:6px">'
+      + '<button class="mode-btn' + (c.colorMode==='category'?' active':'') + '" onclick="setCalColorMode(\'' + c.id + '\',\'category\')">COLOUR BY CATEGORY</button>'
+      + '<button class="mode-btn' + (c.colorMode==='calendar'?' active':'') + '" onclick="setCalColorMode(\'' + c.id + '\',\'calendar\')">COLOUR BY CALENDAR</button>'
+      + '</div>';
+  });
+  const hasHol = calendars.some(c => c.id === 'cal_holidays_us');
+  if (!hasHol) h += '<button class="btn btn-ghost" style="width:100%;margin-top:10px" onclick="restoreHolidayCalendar()">+ ADD US FEDERAL HOLIDAYS</button>';
+  const hasPay = calendars.some(c => c.id === 'cal_paydays');
+  if (!hasPay) h += '<button class="btn btn-ghost" style="width:100%;margin-top:6px" onclick="restorePaydayCalendar()">+ ADD PAYDAY MARKERS</button>';
+  box.innerHTML = h;
+  renderNewCalSwatches();
+}
+function renderNewCalSwatches(){
+  const box = document.getElementById('newCalSwatches');
+  if (!box) return;
+  box.innerHTML = PALETTE.map(function(hex){
+    return '<button class="swatch' + (hex===newCalColor?' active':'') + '" style="background:' + hex + '" onclick="setNewCalColor(\'' + hex + '\')" aria-label="' + hex + '"></button>';
+  }).join('');
+}
+function setNewCalColor(hex){ newCalColor = hex; renderNewCalSwatches(); }
+function setNewCalMode(mode){
+  newCalMode = mode;
+  document.getElementById('newCalModeCat').classList.toggle('active', mode === 'category');
+  document.getElementById('newCalModeCal').classList.toggle('active', mode === 'calendar');
+}
+function createCalendar(){
+  const nameEl = document.getElementById('newCalName');
+  const name = (nameEl.value || '').trim().slice(0,40);
+  if (!name) { nameEl.focus(); return; }
+  pushHistory();
+  const order = calendars.reduce(function(m,c){ return Math.max(m, c.order||0); }, -1) + 1;
+  const cal = {
+    id: calUid(), name: name, color: newCalColor, colorMode: newCalMode,
+    visible: true, order: order, kind: 'user', readOnly: false, suppressed: []
+  };
+  calendars.push(cal);
+  if (activeCalendars.indexOf(cal.id) === -1) activeCalendars.push(cal.id);
+  setActiveCalendars(activeCalendars);
+  saveAll();
+  nameEl.value = '';
+  newCalColor = PALETTE[3];
+  renderCalManagerList();
+  render();                                 // appears immediately, no reload
+  toast('CREATED ' + name);
+}
+function renameCalendar(id, value){
+  const c = calById(id); if (!c) return;
+  const name = (value || '').trim().slice(0,40);
+  if (!name) { renderCalManagerList(); return; }
+  pushHistory();
+  c.name = name;                            // only name changes; no event is touched
+  saveAll(); renderCalManagerList(); render();
+}
+function openRecolour(id){
+  const box = document.getElementById('sw_' + id);
+  if (!box) return;
+  box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+}
+function recolourCalendar(id, hex){
+  const c = calById(id); if (!c) return;
+  pushHistory();
+  c.color = hex;                             // only colour changes
+  saveAll(); renderCalManagerList(); render();
+}
+function setCalColorMode(id, mode){
+  const c = calById(id); if (!c) return;
+  pushHistory();
+  c.colorMode = mode;
+  saveAll(); renderCalManagerList(); render();
+}
+function moveCalendar(id, dir){
+  const sorted = calendars.slice().sort((a,b)=> (a.order-b.order) || a.name.localeCompare(b.name));
+  const i = sorted.findIndex(c => c.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= sorted.length) return;
+  pushHistory();
+  const tmp = sorted[i].order;
+  sorted[i].order = sorted[j].order;
+  sorted[j].order = tmp;
+  if (sorted[i].order === sorted[j].order) { sorted[i].order = j; sorted[j].order = i; }
+  saveAll(); renderCalManagerList(); render();
+}
+function restoreHolidayCalendar(){
+  pushHistory();
+  if (!calById('cal_holidays_us')) calendars.push(HOLIDAY_CALENDAR());
+  ensureHolidays(calById('cal_holidays_us'), [currentYear(), currentYear()+1]);
+  saveAll(); renderCalManagerList(); render();
+}
+function restorePaydayCalendar(){
+  pushHistory();
+  if (!calById('cal_paydays')) calendars.push(PAYDAY_CALENDAR());
+  ensurePaydays(calById('cal_paydays'), [currentYear(), currentYear()+1]);
+  saveAll(); renderCalManagerList(); render();
+}
+
+// ---- CAL-5: delete is never silent and nothing is preselected ----
+function askDeleteCalendar(id){
+  const c = calById(id);
+  if (!c || id === 'cal_default') return;
+  const n = events.filter(e => e.calendarId === id).length;
+  const text = document.getElementById('deleteCalText');
+  const box  = document.getElementById('deleteCalChoices');
+  const btn  = document.getElementById('deleteCalConfirmBtn');
+  btn.disabled = true;
+  pendingCalDelete = { id:id, choice:null, target:null };
+  if (n === 0) {
+    text.innerHTML = 'Delete <b>' + esc(c.name) + '</b>? It holds no events.';
+    box.innerHTML = '<div class="recur-choices">'
+      + '<label><input type="radio" name="delCal" value="delete"> Delete the calendar</label>'
+      + '</div>';
+  } else {
+    const others = calendars.filter(x => x.id !== id);
+    text.innerHTML = 'Delete <b>' + esc(c.name) + '</b>? It holds <b>' + n + '</b> event'
+      + (n===1?'':'s') + '. Choose what happens to them.';
+    box.innerHTML = '<div class="recur-choices">'
+      + '<label><input type="radio" name="delCal" value="move"> MOVE ' + n + ' EVENT' + (n===1?'':'S') + ' TO&#8230;</label>'
+      + '<select id="delCalTarget" style="width:100%;margin:0 0 8px;padding:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-family:var(--mono);font-size:10px">'
+      + others.map(function(o){ return '<option value="' + o.id + '">' + esc(o.name) + '</option>'; }).join('')
+      + '</select>'
+      + '<label><input type="radio" name="delCal" value="purge"> DELETE THE ' + n + ' EVENT' + (n===1?'':'S') + ' TOO</label>'
+      + '</div>';
+  }
+  box.querySelectorAll('input[name=delCal]').forEach(function(r){
+    r.addEventListener('change', function(){
+      pendingCalDelete.choice = r.value;
+      const sel = document.getElementById('delCalTarget');
+      pendingCalDelete.target = sel ? sel.value : null;
+      btn.disabled = false;
+    });
+  });
+  const sel = document.getElementById('delCalTarget');
+  if (sel) sel.addEventListener('change', function(){ pendingCalDelete.target = sel.value; });
+  document.getElementById('deleteCalDialog').classList.add('open');
+}
+function cancelDeleteCalendar(){
+  pendingCalDelete = null;
+  document.getElementById('deleteCalDialog').classList.remove('open');
+}
+function confirmDeleteCalendar(){
+  if (!pendingCalDelete || !pendingCalDelete.choice) return;
+  const c = calById(pendingCalDelete.id);
+  if (!c) { cancelDeleteCalendar(); return; }
+  pushHistory();
+  const members = events.filter(e => e.calendarId === c.id);
+  if (pendingCalDelete.choice === 'move') {
+    const targetId = pendingCalDelete.target || (calById('cal_default') ? 'cal_default' : null);
+    if (targetId && targetId !== c.id) {
+      const t = calById(targetId);
+      members.forEach(function(e){
+        if (t && t.readOnly) e.generated = false;
+        e.calendarId = targetId;
+      });
+    }
+  } else if (pendingCalDelete.choice === 'purge') {
+    members.forEach(function(e){ suppressIfHoliday(e); delete exceptions[e.id]; });
+    const ids = new Set(members.map(e => e.id));
+    events = events.filter(e => !ids.has(e.id));
+  }
+  calendars = calendars.filter(x => x.id !== c.id);
+  activeCalendars = activeCalendars.filter(x => x !== c.id);
+  setActiveCalendars(activeCalendars);
+  cancelDeleteCalendar();
+  saveAll(); renderCalManagerList(); render();
+  toast('DELETED ' + c.name);
+}
+function restorePreMigrationSnapshot(){
+  const raw = localStorage.getItem('chrono_schema_v4_legacy_snapshot');
+  if (!raw) { alert('No pre-migration snapshot was taken on this device.'); return; }
+  let snap;
+  try { snap = JSON.parse(raw); } catch (err) { alert('The snapshot is unreadable.'); return; }
+  if (!confirm('Restore the raw pre-migration events and exceptions?\n\nThis replaces the current event list with the bytes taken before the first v4 migration.')) return;
+  pushHistory();
+  try {
+    if (snap.events !== null && snap.events !== undefined) events = JSON.parse(snap.events);
+    if (snap.exceptions !== null && snap.exceptions !== undefined) exceptions = JSON.parse(snap.exceptions);
+  } catch (err) { alert('The snapshot could not be parsed.'); return; }
+  if (!Array.isArray(events)) events = [];
+  if (!exceptions || typeof exceptions !== 'object') exceptions = {};
+  // Re-stamp so the app stays coherent, without touching anything else.
+  events.forEach(function(e){
+    if (e && (typeof e.calendarId !== 'string' || e.calendarId === '')) e.calendarId = 'cal_default';
+  });
+  saveAll(); render();
+  alert('Restored ' + events.length + ' event' + (events.length===1?'':'s') + ' from the pre-migration snapshot.');
+}
+
+// ============================================================================
+// EXPORT / IMPORT (§A.8) — the ONLY supported way data moves between devices.
+// ============================================================================
+function downloadJSON(payload, name) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1500);
+  } catch (err) {
+    alert('CHRONO could not download the file here. Copy your data from the next screen.');
+    alert(JSON.stringify(payload, null, 2));
+  }
+  try { localStorage.setItem('chrono_last_export', new Date().toISOString()); } catch (e) {}
+  dismissBackupNudge();
+}
+function exportBackup(){
+  sweepOrphanStrays();
+  const payload = {
+    app:'CHRONO', schema:'chrono-v4', exportedAt:new Date().toISOString(), scope:'all',
+    calendars: calendars, events: events, exceptions: exceptions
+  };
+  const d = new Date();
+  const stamp = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  downloadJSON(payload, 'chrono-backup-'+stamp+'.json');
+  saveAll();
+}
+function exportSingleCalendar(id){
+  const c = calById(id); if (!c) return;
+  const members = events.filter(e => e.calendarId === id);
+  const exc = {};
+  members.forEach(function(e){ if (exceptions[e.id]) exc[e.id] = exceptions[e.id]; });
+  const payload = {
+    app:'CHRONO', schema:'chrono-v4', exportedAt:new Date().toISOString(), scope:'calendar',
+    calendars:[c], events:members, exceptions:exc
+  };
+  const safe = c.name.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase() || 'calendar';
+  downloadJSON(payload, 'chrono-'+safe+'-'+dateStr(new Date())+'.json');
+}
+function importIntoCalendar(id){
+  pendingImportTarget = id;
+  openImportDialog();
+}
+let pendingImportTarget = null;
+
+// ---- IMPORT DIALOG (file tab + PASTE IMPORT tab, R-1) ----
+function openImportDialog(){
+  const r = document.getElementById('importReport');
+  if (r) { r.textContent = ''; r.classList.remove('warn'); }
+  document.getElementById('importOverlay').classList.add('open');
+  setImportTab('file');
+}
+// The sidebar's plain IMPORT must not inherit a target left over from a
+// cancelled "import into this calendar" in the manager.
+function openPlainImport(){
+  pendingImportTarget = null;
+  openImportDialog();
+}
+function closeImportDialog(){
+  document.getElementById('importOverlay').classList.remove('open');
+  pendingImportTarget = null;
+}
+function closeImportOverlay(e){ if (e.target === document.getElementById('importOverlay')) closeImportDialog(); }
+function setImportTab(which){
+  const isFile = which === 'file';
+  document.getElementById('importTabFile').classList.toggle('active', isFile);
+  document.getElementById('importTabPaste').classList.toggle('active', !isFile);
+  document.getElementById('importPaneFile').classList.toggle('active', isFile);
+  document.getElementById('importPanePaste').classList.toggle('active', !isFile);
+  if (!isFile) setTimeout(function(){ const t = document.getElementById('pasteArea'); if (t) t.focus(); }, 40);
+}
+function pasteFromClipboard(){
+  const ta = document.getElementById('pasteArea');
+  if (!ta) return;
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText().then(function(txt){ ta.value = txt; reportImport('Pasted ' + txt.length + ' characters.', false); })
+      .catch(function(){ ta.focus(); reportImport('Clipboard blocked — long-press the box and paste.', true); });
+  } else {
+    ta.focus();
+    reportImport('This browser will not read the clipboard — long-press the box and paste.', true);
+  }
+}
+function reportImport(msg, warn){
+  const r = document.getElementById('importReport');
+  if (!r) return;
+  r.textContent = msg;
+  r.classList.toggle('warn', !!warn);
+}
+function doPasteImport(){
+  const ta = document.getElementById('pasteArea');
+  if (!ta || !ta.value.trim()) { reportImport('Nothing pasted yet.', true); return; }
+  let data;
+  try { data = JSON.parse(ta.value.trim()); }
+  catch (err) { reportImport('That is not valid JSON. Copy the whole value including the [ and ].', true); return; }
+  applyImportedData(data, true);
+}
+function triggerImport(){
+  const f = document.getElementById('importFile');
+  if (f) f.click();
+}
+function importBackup(e){
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    let data;
+    try { data = JSON.parse(reader.result); }
+    catch (err) { reportImport('That file is not valid JSON.', true); openImportDialog(); return; }
+    applyImportedData(data, true);
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ---- BUG-8: validate and COERCE before anything is written. Import never
+// throws into the render path; a malformed item is repaired or skipped, and the
+// count of each is reported.
+function validateEvents(arr) {
+  const out = [];
+  let adjusted = 0, skipped = 0;
+  arr.forEach(function(raw){
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { skipped++; return; }
+    let touched = false;
+    let id = typeof raw.id === 'string' && raw.id ? raw.id : (touched = true, uid());
+    let date = typeof raw.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.date.trim()) ? raw.date.trim() : null;
+    if (!date) { skipped++; return; }
+    const allDay = !!raw.allDay;
+    let start = typeof raw.start === 'string' && /^\d{1,2}:\d{2}$/.test(raw.start) ? raw.start : null;
+    let end   = typeof raw.end   === 'string' && /^\d{1,2}:\d{2}$/.test(raw.end)   ? raw.end   : null;
+    if (allDay) {
+      if (start !== '00:00') { start = '00:00'; touched = true; }
+      if (end   !== '23:59') { end   = '23:59'; touched = true; }
+    } else {
+      if (!start) { start = '09:00'; touched = true; }
+      if (!end)   { end = shiftTimeStr(start, 60); touched = true; }
+    }
+    let calId = (typeof raw.calendarId === 'string' && raw.calendarId) ? raw.calendarId : null;
+    if (!calId) { calId = 'cal_default'; touched = true; }
+    let title = typeof raw.title === 'string' && raw.title.trim() ? raw.title : null;
+    if (!title) { title = '(untitled)'; touched = true; }
+    const ev = Object.assign({}, raw, {
+      id: id, title: title, date: date, allDay: allDay, start: start, end: end,
+      desc: typeof raw.desc === 'string' ? raw.desc : '',
+      color: typeof raw.color === 'string' ? raw.color : '',
+      recurrence: raw.recurrence || 'none',
+      recurrenceEnd: raw.recurrenceEnd || '',
+      weeklyDays: Array.isArray(raw.weeklyDays) ? raw.weeklyDays : [],
+      calendarId: calId,
+      link: typeof raw.link === 'string' ? raw.link : ''
+    });
+    if (touched) adjusted++;
+    out.push(ev);
+  });
+  return { events: out, adjusted: adjusted, skipped: skipped };
+}
+
+// Accepts all four shapes in §A.8, in detection order.
+function applyImportedData(data, confirmFirst) {
+  let events_in = null, exceptions_in = {}, calendars_in = null, shape = '';
+
+  if (Array.isArray(data)) {
+    events_in = data; shape = 'a raw event array';
+  } else if (data && typeof data === 'object' && data.schema === 'chrono-v4' && Array.isArray(data.events)) {
+    events_in = data.events; shape = 'a CHRONO v4 backup';
+    calendars_in = Array.isArray(data.calendars) ? data.calendars : null;
+    if (data.exceptions && typeof data.exceptions === 'object') exceptions_in = data.exceptions;
+  } else if (data && typeof data === 'object' && data.schema === 'chrono-v3' && Array.isArray(data.events)) {
+    events_in = data.events; shape = 'a CHRONO v3 backup';
+    if (data.exceptions && typeof data.exceptions === 'object') exceptions_in = data.exceptions;
+  } else if (data && typeof data === 'object' && Array.isArray(data.events)) {
+    events_in = data.events; shape = 'a CHRONO backup';
+    if (data.exceptions && typeof data.exceptions === 'object') exceptions_in = data.exceptions;
+    if (Array.isArray(data.calendars)) calendars_in = data.calendars;
+  }
+  if (!events_in) { reportImport('That data holds no CHRONO events.', true); return; }
+
+  const v = validateEvents(events_in);
+  if (!v.events.length) { reportImport('Nothing usable in that data (0 events, ' + v.skipped + ' skipped).', true); return; }
+
+  const summary = 'Restoring ' + v.events.length + ' event' + (v.events.length===1?'':'s') + '. '
+    + v.adjusted + ' adjusted, ' + v.skipped + ' skipped.';
+  if (confirmFirst && !confirm(summary + '\n\nThis replaces what is currently stored on this device.')) return;
+
+  pushHistory();
+
+  // v4 envelopes bring their own calendars. Match by name, otherwise create.
+  if (calendars_in) {
+    calendars_in.forEach(function(inCal){
+      if (!inCal || typeof inCal !== 'object') return;
+      if (calById(inCal.id)) return;
+      const byName = calendars.find(function(c){ return c.name === inCal.name; });
+      const target = byName || null;
+      if (target) return;
+      const order = calendars.reduce(function(m,c){ return Math.max(m, c.order||0); }, -1) + 1;
+      calendars.push({
+        id: (typeof inCal.id === 'string' && inCal.id) ? inCal.id : calUid(),
+        name: (inCal.name || 'Imported').slice(0,40),
+        color: PALETTE.indexOf(inCal.color) !== -1 ? inCal.color : PALETTE[3],
+        colorMode: inCal.colorMode === 'calendar' ? 'calendar' : 'category',
+        visible: inCal.visible !== false,
+        order: order,
+        kind: 'user',
+        readOnly: false,
+        suppressed: Array.isArray(inCal.suppressed) ? inCal.suppressed : []
+      });
+    });
+  }
+
+  // An explicit "import INTO this calendar" remaps everything and mints fresh
+  // ids wherever an id would collide.
+  const forced = pendingImportTarget ? calById(pendingImportTarget) : null;
+  const liveIds = new Set(calendars.map(c => c.id));
+  const haveIds = new Set(events.map(e => e.id));
+  v.events.forEach(function(e){
+    if (!liveIds.has(e.calendarId)) e.calendarId = 'cal_default';
+    if (forced) { e.calendarId = forced.id; if (forced.readOnly) e.generated = false; }
+    if (haveIds.has(e.id)) e.id = uid();
+    haveIds.add(e.id);
+  });
+
+  events = events.concat(v.events);
+  Object.keys(exceptions_in).forEach(function(k){ exceptions[k] = exceptions_in[k]; });
+  localStorage.setItem('chrono_seeded_' + SEED_VERSION, 'imported-' + new Date().toISOString());
+  saveAll();
+  const b = document.getElementById('storageBanner');
+  if (b) b.classList.remove('open');
+  storageCorrupt = false;
+  closeDetail();
+  renderCalManagerList();
+  render();
+  reportImport(summary + ' Source: ' + shape + '.', false);
+  setTimeout(closeImportDialog, 900);
+}
+
+// ---- H-4: the payday chip ----
+const ATLAS_PAY_URL_DEFAULT = 'https://youraveragegamer4407.github.io/atlas-tracker/';
+function atlasPayUrl(){
+  try { return localStorage.getItem('chrono_atlas_url') || ATLAS_PAY_URL_DEFAULT; } catch (e) { return ATLAS_PAY_URL_DEFAULT; }
+}
+let payDialogDate = null;
+function showPayday(ev, ds){
+  if (ev) ev.stopPropagation();
+  payDialogDate = ds;
+  const frac = (+ds.slice(8,10)) <= 15 ? '1st of the month' : '15th of the month';
+  const y = +ds.slice(0,4), m = +ds.slice(5,7)-1, day = (+ds.slice(8,10)) <= 15 ? 1 : 15;
+  const actual = dateStr(new Date(y, m, day));
+  const moved = actual !== ds;
+  document.getElementById('payText').innerHTML =
+    '<div>' + esc(ds) + ' \u2014 PAYDAY (' + frac + ')</div>'
+    + (moved ? '<div style="color:#e3c46b">Weekend-adjusted: the ' + frac + ' falls on ' + esc(actual) + ', observed the ' + ((+ds.slice(8,10)) > (+actual.slice(8,10)) ? 'Monday after' : 'Friday before') + '.</div>' : '')
+    + '<div style="color:var(--text3);margin-top:8px">The pay period view lives in ATLAS. This chip only puts the date on the calendar you already open.</div>';
+  document.getElementById('payDialog').classList.add('open');
+}
+function closePayDialog(){
+  document.getElementById('payDialog').classList.remove('open');
+  payDialogDate = null;
+}
+function openAtlasPayPeriod(){ window.open(atlasPayUrl(), '_blank', 'noopener'); closePayDialog(); }
+
+// ============================================================================
+// STATS — with the calendar filter applied (CAL-3 / #5)
+// ============================================================================
+function renderStats() {
+  const mv = document.getElementById('mainView');
+  const ws = wkStart(cursor);
+  const sd = dateStr(ws), ed = dateStr(addDays(ws,6));
+  const all = expandRange(sd, ed);          // expandRange already drops hidden calendars
+
+  const catMin = {}, bucketMin = { work:0, sleep:0, personal:0 };
+  const BUCKET = { '':'work','ev-yellow':'work','ev-teal':'sleep',
+    'ev-green':'personal','ev-orange':'personal','ev-lime':'personal',
+    'ev-pink':'personal','ev-red':'personal','ev-purple':'personal' };
+  let totalMin = 0;
+  all.forEach(function(x){
+    const ev = x.ev;
+    if (ev.allDay || !ev.start || !ev.end) return;
+    let dur = minuteOf(x.ce || ev.end) - minuteOf(x.cs || ev.start);
+    if (dur <= 0) dur += 1440;
+    const c = ev.color || '';
+    catMin[c] = (catMin[c]||0) + dur;
+    bucketMin[BUCKET[c]||'personal'] += dur;
+    totalMin += dur;
+  });
+
+  const cats = Object.keys(catMin).sort((a,b)=> catMin[b]-catMin[a]);
+  const hrs = m => (m/60).toFixed(1);
+  const f = hiddenCalStats();
+  let h = '<div style="display:flex;flex-wrap:wrap;gap:28px;padding:24px;overflow-y:auto;height:100%;box-sizing:border-box;align-content:flex-start">';
+  if (f.filtered) {
+    h += '<div style="flex:1 1 100%"><div class="filter-banner">FILTERED \u2014 SHOWING ' + f.shown + ' OF ' + f.total + ' CALENDARS</div></div>';
+  }
+  h += '<div style="flex:0 0 auto"><div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px">// TIME BY CATEGORY \u2014 THIS WEEK</div>';
+  h += '<canvas id="catPie" width="260" height="260" style="display:block;max-width:100%"></canvas></div>';
+  h += '<div style="flex:1 1 260px;min-width:250px"><div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:10px">// HOURS BY CATEGORY</div>';
+  h += '<table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px">';
+  cats.forEach(function(c){
+    const hex = COLOR_HEX[c]||'#7dd8f0', lbl = CAT_LABEL[c]||'WORK';
+    const pct = totalMin ? Math.round(catMin[c]/totalMin*100) : 0;
+    h += '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+hex+';margin-right:8px"></span>'+lbl+'</td>'
+      + '<td style="padding:6px 8px;text-align:right;color:var(--text2)">'+hrs(catMin[c])+'h</td>'
+      + '<td style="padding:6px 8px;text-align:right;color:var(--text3);width:52px">'+pct+'%</td></tr>';
+  });
+  h += '</table></div>';
+
+  const target = 8*7;
+  const bks = [['work','WORK','#7dd8f0'],['sleep','SLEEP','#a8b8e8'],['personal','PERSONAL / FREE','#7dddb0']];
+  const bucketCats = { work:[], sleep:[], personal:[] };
+  Object.keys(CAT_LABEL).forEach(function(c){ bucketCats[BUCKET[c]||'personal'].push(c); });
+  h += '<div style="flex:1 1 100%;margin-top:8px"><div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:4px">// 8 / 8 / 8 RULE \u2014 8H WORK \u00b7 8H SLEEP \u00b7 8H PERSONAL (PER DAY)</div>';
+  h += '<div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:12px">TARGET: 56H PER WEEK EACH</div>';
+  h += '<table style="width:100%;max-width:560px;border-collapse:collapse;font-family:var(--mono);font-size:11px">';
+  bks.forEach(function(b){
+    const k = b[0], lbl = b[1], hex = b[2];
+    const hh = bucketMin[k]/60, diff = hh - target;
+    const sign = diff >= 0 ? '+' : '';
+    const col = diff >= 0 ? '#7dddb0' : '#f28b9a';
+    const pctW = Math.min(100, Math.round(hh/(target*1.5)*100));
+    const catList = bucketCats[k].map(function(c){ return CAT_LABEL[c]||c; }).join(' \u2022 ');
+    h += '<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+hex+';margin-right:8px"></span>'+lbl
+      + '<div style="font-size:9px;color:var(--text3);margin-top:3px;letter-spacing:1px">'+catList+'</div></td>'
+      + '<td style="padding:8px;text-align:right;color:var(--text2);width:80px">'+hh.toFixed(1)+'h / 56h</td>'
+      + '<td style="padding:8px;text-align:right;width:80px;color:'+col+';font-weight:700">'+sign+diff.toFixed(1)+'h</td></tr>'
+      + '<tr><td colspan="3" style="padding:0 8px 10px"><div style="height:6px;background:var(--surface);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pctW+'%;background:'+hex+'"></div></div></td></tr>';
+  });
+  h += '</table></div></div>';
+  mv.innerHTML = h;
+
+  const cv = document.getElementById('catPie');
+  if (cv && cv.getContext) {
+    const ctx = cv.getContext('2d');
+    const cx = 130, cy = 130, r = 118;
+    let ang = -Math.PI/2;
+    if (totalMin > 0) {
+      cats.forEach(function(c){
+        const frac = catMin[c]/totalMin;
+        const a2 = ang + frac*Math.PI*2;
+        ctx.beginPath(); ctx.moveTo(cx,cy);
+        ctx.arc(cx,cy,r,ang,a2); ctx.closePath();
+        ctx.fillStyle = COLOR_HEX[c]||'#7dd8f0'; ctx.fill();
+        ang = a2;
+      });
+    } else {
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fillStyle = '#1c2128'; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(cx,cy,54,0,Math.PI*2);
+    ctx.fillStyle = '#0d1117'; ctx.fill();
+    ctx.fillStyle = '#8b949e'; ctx.font = '11px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText((totalMin/60).toFixed(1)+'h', cx, cy-2);
+    ctx.fillText('SCHEDULED', cx, cy+12);
+  }
+}
+
+// ============================================================================
+// H-3 — WEEK TEMPLATES ("stamp this week")
+// ============================================================================
+function saveWeekTemplate(name) {
+  const ws = wkStart(cursor);
+  const sd = dateStr(ws), ed = dateStr(addDays(ws,6));
+  const blocks = [];
+  const seen = new Set();
+  expandRange(sd, ed).forEach(function(x){
+    const ev = x.ev;
+    if (ev.allDay) return;
+    if (ev.seriesOf) return;                       // skip one-off spawned occurrences
+    if (seen.has(ev.id)) return;
+    seen.add(ev.id);
+    const c = calForEvent(ev);
+    if (c && c.kind === 'holiday') return;
+    blocks.push({
+      title: ev.title, allDay: false,
+      start: ev.start, end: ev.end, desc: ev.desc || '',
+      color: ev.color || '', recurrence: 'none', recurrenceEnd: '',
+      weeklyDays: [], calendarId: ev.calendarId || 'cal_default', link: ev.link || '',
+      dow: parseLocal(x.occ).getDay()
+    });
+  });
+  const tpl = { name: name, savedAt: new Date().toISOString(), blocks: blocks };
+  const all = loadJSON('chrono_week_templates', []);
+  const list = Array.isArray(all) ? all : [];
+  const i = list.findIndex(t => t.name === name);
+  if (i >= 0) list[i] = tpl; else list.push(tpl);
+  localStorage.setItem('chrono_week_templates', JSON.stringify(list));
+  return blocks.length;
+}
+function stampWeekTemplate(name) {
+  const list = loadJSON('chrono_week_templates', []);
+  const tpl = (Array.isArray(list) ? list : []).find(t => t.name === name);
+  if (!tpl) { toast('NO TEMPLATE CALLED ' + name); return; }
+  const ws = wkStart(cursor);
+  pushHistory();
+  tpl.blocks.forEach(function(b){
+    const d = addDays(ws, (b.dow + 6) % 7);       // dow 0=Sun -> Monday-first column
+    events.push(Object.assign({}, b, { id: uid(), date: dateStr(d), dow: undefined }));
+  });
+  saveAll(); render();
+  toast('STAMPED ' + tpl.blocks.length + ' BLOCKS');
+}
+function openWeekTemplateMenu() {
+  const list = loadJSON('chrono_week_templates', []);
+  const names = (Array.isArray(list) ? list : []).map(t => t.name);
+  const choice = prompt(
+    'WEEK TEMPLATES\n\nSaved: ' + (names.length ? names.join(', ') : '(none)')
+    + '\n\nType a name to STAMP it onto this week, or type a NEW name to SAVE this week as a template.\n'
+    + 'Prefix with "save:" to force a save.',
+    ''
+  );
+  if (!choice) return;
+  const raw = choice.trim();
+  if (!raw) return;
+  if (raw.toLowerCase().indexOf('save:') === 0) {
+    const n = saveWeekTemplate(raw.slice(5).trim() || 'Untitled Week');
+    toast('SAVED TEMPLATE (' + n + ' BLOCKS)');
+    return;
+  }
+  if (names.indexOf(raw) !== -1) { stampWeekTemplate(raw); return; }
+  if (confirm('No template called "' + raw + '". Save this week as a new template named that?')) {
+    const n = saveWeekTemplate(raw);
+    toast('SAVED TEMPLATE (' + n + ' BLOCKS)');
+  }
+}
+
+// ---- BUG-8 (continued): keep "today" honest past midnight ----
+let _lastTodayStr = dateStr(today);
+setInterval(function(){
+  const ds = dateStr(new Date());
+  if (ds === _lastTodayStr) return;
+  _lastTodayStr = ds;
+  today = new Date();
+  render();                                  // also refreshes the countdowns
+}, 60000);
+
+// ============================================================================
+// BUG-3 — THE ANDROID BACK BUTTON
+// v3 registered nothing, so Capacitor's default applied (no history => exit)
+// and the app quit from an open popup, modal or drawer. v4 walks a LAYER STACK
+// topmost first, and only exits when the stack is empty. A history state is
+// pushed whenever a layer opens and popped when it closes, so the OS gesture and
+// the listener agree instead of racing.
+// ============================================================================
+function layerStack() {
+  const L = [];
+  if (document.getElementById('deleteCalDialog').classList.contains('open')) L.push('deleteCal');
+  if (document.getElementById('importOverlay').classList.contains('open'))    L.push('import');
+  if (document.getElementById('payDialog').classList.contains('open'))        L.push('pay');
+  if (document.getElementById('detailPopup').classList.contains('open'))      L.push('detail');
+  if (document.getElementById('recurDialog').classList.contains('open'))      L.push('recur');
+  if (document.getElementById('modalOverlay').classList.contains('open'))     L.push('modal');
+  if (document.getElementById('customCfgOverlay').classList.contains('open')) L.push('customCfg');
+  if (document.getElementById('calMgrOverlay').classList.contains('open'))    L.push('calMgr');
+  const sb = document.getElementById('sidebar');
+  if (sb && sb.classList.contains('open')) L.push('sidebar');
+  return L;
+}
+function closeTopmostLayer() {
+  const L = layerStack();
+  if (!L.length) return false;
+  const top = L[0];                          // the list is built topmost first
+  if (top === 'deleteCal')      cancelDeleteCalendar();
+  else if (top === 'import')    closeImportDialog();
+  else if (top === 'pay')       closePayDialog();
+  else if (top === 'detail')    closeDetail();
+  else if (top === 'recur')     closeRecurDialog();
+  else if (top === 'modal')     closeModal();
+  else if (top === 'customCfg') closeCustomCfg();
+  else if (top === 'calMgr')    closeCalendarManager();
+  else if (top === 'sidebar')   toggleSidebar(false);
+  return true;
+}
+function initBackButton() {
+  const cap = window.Capacitor;
+  if (!cap) return;
+  // With @capacitor/app installed this fires for the OS back gesture/button.
+  try {
+    if (cap.Plugins && cap.Plugins.App && cap.Plugins.App.addListener) {
+      cap.Plugins.App.addListener('backButton', function(){
+        if (!closeTopmostLayer()) {
+          if (cap.Plugins.App.exitApp) cap.Plugins.App.exitApp();
+        }
+      });
+      return;
+    }
+  } catch (err) { /* fall through to the history shim */ }
+  // Without the plugin, keep the WebView's history non-empty whenever a layer is
+  // open, so the system back gesture has somewhere to go.
+  window.addEventListener('popstate', function(){
+    if (!closeTopmostLayer()) return;
+  });
+  setInterval(function(){
+    const open = layerStack().length;
+    if (!window._chronoLayerDepth) window._chronoLayerDepth = 0;
+    if (open > window._chronoLayerDepth) {
+      history.pushState({ chrono: true }, '');
+    }
+    window._chronoLayerDepth = open;
+  }, 250);
+}
+
+// ============================================================================
+// BOOT
+// ============================================================================
+(function boot(){
+  // 1) migration FIRST (it is idempotent and returns immediately once marked)
+  migrateToV4();
+  if (!calendars.length) calendars = seedCalendars();
+  if (!calById('cal_default')) calendars.unshift(DEFAULT_CALENDAR());
+  // 1b) the calendars exist now, so the visibility filter can finally be
+  //     reconciled against them. Without this the first run renders blank.
+  reconcileActiveCalendars();
+  // 2) the generated calendars: current year + next, every load, deduped
+  ensureHolidaysForCursor();
+  const payCal = calById('cal_paydays');
+  if (payCal) ensurePaydays(payCal, [currentYear(), currentYear()+1]);
+  // 2b) the generated calendars may have just been added, so reconcile again.
+  reconcileActiveCalendars();
+  saveAll();
+  // 3) UI
+  applyTimeFmtUI();
+  applyHourZoomUI();
+  updateUndoRedoUI();
+  syncSidebarButton();
+  maybeShowStorageBanner();
+  maybeShowHint();
+  maybeShowBackupNudge();
+  renderCatLegend();
+  render();                       // render() ends with renderPunchList()
+  initBackButton();
+  registerServiceWorker();
+})();
+
+// ---- PWA / OFFLINE (section G) ----------------------------------------------
+// Network-first with a cache fallback: a redeploy is picked up on the next load,
+// and airplane mode still opens the calendar with the same events.
+function registerServiceWorker(){
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol === 'file:') return;      // opening the file directly still works, just not offline-cached
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){
+      /* offline cache unavailable; the app itself still runs */
+    });
+  });
+}
+</script>
+</body>
+</html>

@@ -1,11 +1,18 @@
 {
-  "name": "CHRONO Calendar",
+  "name": "CHRONO",
   "short_name": "CHRONO",
-  "description": "Time-management calendar by TEMPO - week/day/month/custom views, recurring events, categories.",
+  "description": "CHRONO — a local-first calendar with multiple calendars, generated US federal holidays, web or APK delivery, offline-capable",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#080c10",
-  "theme_color": "#080c10"
+  "theme_color": "#080c10",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }
