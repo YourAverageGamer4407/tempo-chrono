@@ -1,9 +1,0 @@
-# CHRONO v4
-
-Live: https://youraveragegamer4407.github.io/tempo-chrono/
-
-Local-first calendar. Your events live in this browser, on this device.
-Install it to your home screen from the browser menu ("Add to Home screen") and it
-opens full-screen, with no address bar.
-
-Deployed 2026-11-09. Source of truth: Time Management\PILOT\chrono-v4\index.html
