@@ -181,9 +181,6 @@ body {
 .month-event.ev-orange { background: #f5b07a; color: #080c10; }
 .month-event.ev-lime   { background: #d8f07a; color: #080c10; }
 .month-event.ev-pink   { background: #f7c8e0; color: #080c10; }
-.month-payday { display: flex; align-items: center; gap: 4px; background: transparent; border: 1px solid var(--ok); color: var(--ok); border-radius: 3px; padding: 1px 5px; font-size: 9px; font-family: var(--mono); letter-spacing: 1px; margin: 1px 0; cursor: pointer; }
-.month-payday:hover { background: rgba(125,221,176,.12); }
-
 /* WEEK */
 .week-view { display: flex; flex-direction: column; height: 100%; }
 .week-header-row { display: grid; grid-template-columns: var(--gutter) repeat(var(--ncols, 7), minmax(0, 1fr)); border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
@@ -944,18 +941,6 @@ body {
   </div>
 </div>
 
-<!-- PAYDAY DETAIL -->
-<div class="recur-dialog" id="payDialog">
-  <div class="recur-box" style="width:360px">
-    <h4>// PAYDAY</h4>
-    <div id="payText" style="font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:16px"></div>
-    <div class="recur-actions">
-      <button class="btn btn-ghost" onclick="closePayDialog()">CLOSE</button>
-      <button class="btn btn-primary" onclick="openAtlasPayPeriod()">OPEN ATLAS PAY PERIOD</button>
-    </div>
-  </div>
-</div>
-
 <!-- DETAIL POPUP -->
 <div class="detail-popup" id="detailPopup">
   <button class="detail-sheet-handle" onclick="closeDetail()" title="Close"><i></i></button>
@@ -1004,7 +989,8 @@ body {
      F  no cloud sync — export/import is the data path (stated in the UI)
      G  PWA shell (manifest + service worker) and the APK scaffolding
      H  H-1 duty days · H-2 split-series · H-3 week templates ·
-        H-4 payday markers · H-5 countdown ticker · H-6 event link
+        H-4 payday ticker (no payday calendar — removed v4.2) ·
+        H-5 countdown ticker · H-6 event link
    The approved visual design is UNCHANGED: same palette, same Inter/JetBrains
    Mono, same desktop layout. Everything v4 adds is additive.
    ============================================================================ */
@@ -1110,12 +1096,8 @@ function HOLIDAY_CALENDAR() {
            colorMode:'calendar', visible:true, order:1, kind:'holiday', readOnly:true,
            holidaySet:'us-federal', years:[], suppressed:[] };
 }
-function PAYDAY_CALENDAR() {
-  return { id:'cal_paydays', name:'Paydays', color:'#7dddb0', colorMode:'calendar',
-           visible:true, order:2, kind:'user', readOnly:false, suppressed:[] };
-}
 function seedCalendars() {
-  return [DEFAULT_CALENDAR(), HOLIDAY_CALENDAR(), PAYDAY_CALENDAR()];
+  return [DEFAULT_CALENDAR(), HOLIDAY_CALENDAR()];
 }
 function calById(id) { return calendars.find(c => c.id === id) || null; }
 function calForEvent(ev) { return calById(ev && ev.calendarId) || calById('cal_default') || calendars[0] || null; }
@@ -1468,8 +1450,37 @@ function repairDataOnce() {
   return { dupes: dupes, liberty: liberty };
 }
 
-// ---- PAYDAY MARKERS (H-4): military pay lands on the 1st and 15th, adjusted
-// for weekends with the same observed rule as the holidays.
+// ---- REMOVE THE PAYDAY CALENDAR (v4.2, Commander's request 2026-11-12) ------
+// The Paydays calendar was a generated calendar: it existed only because
+// ensurePaydays() filled it on every load. Deleting it from the calendar
+// manager would have been undone on the next visit, so the generator is gone
+// and this removes both the calendar and every event it ever created. Behind
+// its own marker, so it runs exactly once and cannot resurrect them later.
+function removePaydayCalendarOnce() {
+  const MARKER = 'chrono_payday_removed_v42';
+  if (localStorage.getItem(MARKER)) return 0;
+  const before = events.length;
+  // Matched by calendar id AND by the payKey stamp the generator wrote, so a
+  // payday event that was moved to another calendar is still removed.
+  events = events.filter(function(e){
+    if (!e || typeof e !== 'object') return true;
+    if (e.calendarId === 'cal_paydays') return false;
+    if (typeof e.payKey === 'string' && e.payKey.indexOf('payday|') === 0) return false;
+    if (e.id && /^pay_\d{8}$/.test(e.id)) return false;
+    return true;
+  });
+  calendars = calendars.filter(c => c.id !== 'cal_paydays');
+  activeCalendars = activeCalendars.filter(id => id !== 'cal_paydays');
+  setActiveCalendars(activeCalendars);
+  const removed = before - events.length;
+  saveAll();
+  try { localStorage.setItem(MARKER, new Date().toISOString()); } catch (e) {}
+  return removed;
+}
+
+// ---- PAYDAY DATES: military pay lands on the 1st and 15th, adjusted for
+// weekends with the same observed rule as the holidays. These dates feed the
+// countdown ticker only — there is no payday calendar any more.
 function paydaysForYear(year) {
   const out = [];
   [0,1,2,3,4,5,6,7,8,9,10,11].forEach(function(m){
@@ -1480,27 +1491,6 @@ function paydaysForYear(year) {
     });
   });
   return out.sort((a,b)=> a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
-}
-function ensurePaydays(cal, years) {
-  if (!cal) return 0;
-  const existing = new Set(events.filter(e => e.calendarId === cal.id).map(e => e.payKey));
-  let added = 0;
-  years.forEach(function(y){
-    paydaysForYear(y).forEach(function(p){
-      const key = 'payday|' + p.date;
-      if (existing.has(key)) return;
-      events.push({
-        id: 'pay_' + p.date.replace(/-/g,''), title: 'PAYDAY', date: p.date, allDay: true,
-        start:'00:00', end:'23:59',
-        desc: 'Military payday. Actual 1st/15th: ' + p.actual + '. Tap the PAYDAY chip in MONTH view to open the ATLAS pay period.',
-        color: '', recurrence:'none', recurrenceEnd:'', weeklyDays: [],
-        calendarId: cal.id, payKey: key, link:''
-      });
-      existing.add(key);
-      added++;
-    });
-  });
-  return added;
 }
 
 // ============================================================================
@@ -1546,8 +1536,6 @@ function migrateToV4() {
   // STEP 5 — seed the generated calendars (idempotent by themselves).
   const hol = calById('cal_holidays_us');
   if (hol) ensureHolidays(hol, [currentYear(), currentYear()+1]);
-  const pay = calById('cal_paydays');
-  if (pay) ensurePaydays(pay, [currentYear(), currentYear()+1]);
 
   // STEP 6 — write back and mark done. SAME KEYS as v2 for the data.
   writeStorage();
@@ -2437,7 +2425,6 @@ function renderMonth() {
   const off = (new Date(yr, mo, 1).getDay()+6)%7;   // Monday-first offset
   const sd = dateStr(new Date(yr,mo,1-off)), ed = dateStr(new Date(yr,mo,42-off));
   const all = expandRange(sd, ed);
-  const paySet = new Set(paydaysForYear(yr).map(p=>p.date).concat(paydaysForYear(yr+1).map(p=>p.date)));
   const mdays = [];
   for (let i=0;i<42;i++) mdays.push(dateStr(new Date(yr,mo,1-off+i)));
   // One bar per multi-day all-day event, split at week boundaries like Google.
@@ -2468,9 +2455,6 @@ function renderMonth() {
     });
     const hidden = dayEvs.length - 4;
     if (hidden > 0) h += '<div class="month-more" onclick="event.stopPropagation();goDay(\'' + ds + '\')">+' + hidden + ' more</div>';
-    if (paySet.has(ds)) {
-      h += '<div class="month-payday" onclick="event.stopPropagation();showPayday(event,\'' + ds + '\')">&#9679; PAYDAY</div>';
-    }
     h += '</div>';
   }
   // the bar overlay, drawn last so it sits above the cells' own content
@@ -2614,7 +2598,7 @@ window.addEventListener('resize', syncSidebarButton);
 
 // ---- INTERACTIONS (parity #22, #23) ----
 function cellClick(ds,e){
-  if (e.target.closest('.month-event, .month-more, .month-payday')) return;
+  if (e.target.closest('.month-event, .month-more')) return;
   openNewEvent(ds);
 }
 function colClick(ds,e){
@@ -3215,7 +3199,6 @@ document.addEventListener('keydown', function(e){
   if (e.key !== 'Escape') return;
   if (document.getElementById('deleteCalDialog').classList.contains('open')) { cancelDeleteCalendar(); return; }
   if (document.getElementById('importOverlay').classList.contains('open'))    { closeImportDialog(); return; }
-  if (document.getElementById('payDialog').classList.contains('open'))        { closePayDialog(); return; }
   if (document.getElementById('detailPopup').classList.contains('open'))      { closeDetail(); return; }
   if (document.getElementById('recurDialog').classList.contains('open'))      { closeRecurDialog(); return; }
   if (document.getElementById('modalOverlay').classList.contains('open'))     { closeModal(); return; }
@@ -3261,8 +3244,6 @@ function saveCustomCfg(){
 // ============================================================================
 function openCalendarManager(){
   ensureHolidaysForCursor();               // B.2 — regenerate whenever it is opened
-  const pay = calById('cal_paydays');
-  if (pay) ensurePaydays(pay, [currentYear(), currentYear()+1]);
   saveAll();
   renderCalManagerList();
   document.getElementById('calMgrOverlay').classList.add('open');
@@ -3309,8 +3290,6 @@ function renderCalManagerList(){
   });
   const hasHol = calendars.some(c => c.id === 'cal_holidays_us');
   if (!hasHol) h += '<button class="btn btn-ghost" style="width:100%;margin-top:10px" onclick="restoreHolidayCalendar()">+ ADD US FEDERAL HOLIDAYS</button>';
-  const hasPay = calendars.some(c => c.id === 'cal_paydays');
-  if (!hasPay) h += '<button class="btn btn-ghost" style="width:100%;margin-top:6px" onclick="restorePaydayCalendar()">+ ADD PAYDAY MARKERS</button>';
   box.innerHTML = h;
   renderNewCalSwatches();
 }
@@ -3390,13 +3369,6 @@ function restoreHolidayCalendar(){
   ensureHolidays(calById('cal_holidays_us'), [currentYear(), currentYear()+1]);
   saveAll(); renderCalManagerList(); render();
 }
-function restorePaydayCalendar(){
-  pushHistory();
-  if (!calById('cal_paydays')) calendars.push(PAYDAY_CALENDAR());
-  ensurePaydays(calById('cal_paydays'), [currentYear(), currentYear()+1]);
-  saveAll(); renderCalManagerList(); render();
-}
-
 // ---- CAL-5: delete is never silent and nothing is preselected ----
 function askDeleteCalendar(id){
   const c = calById(id);
@@ -3724,31 +3696,6 @@ function applyImportedData(data, confirmFirst) {
   setTimeout(closeImportDialog, 900);
 }
 
-// ---- H-4: the payday chip ----
-const ATLAS_PAY_URL_DEFAULT = 'https://youraveragegamer4407.github.io/atlas-tracker/';
-function atlasPayUrl(){
-  try { return localStorage.getItem('chrono_atlas_url') || ATLAS_PAY_URL_DEFAULT; } catch (e) { return ATLAS_PAY_URL_DEFAULT; }
-}
-let payDialogDate = null;
-function showPayday(ev, ds){
-  if (ev) ev.stopPropagation();
-  payDialogDate = ds;
-  const frac = (+ds.slice(8,10)) <= 15 ? '1st of the month' : '15th of the month';
-  const y = +ds.slice(0,4), m = +ds.slice(5,7)-1, day = (+ds.slice(8,10)) <= 15 ? 1 : 15;
-  const actual = dateStr(new Date(y, m, day));
-  const moved = actual !== ds;
-  document.getElementById('payText').innerHTML =
-    '<div>' + esc(ds) + ' \u2014 PAYDAY (' + frac + ')</div>'
-    + (moved ? '<div style="color:#e3c46b">Weekend-adjusted: the ' + frac + ' falls on ' + esc(actual) + ', observed the ' + ((+ds.slice(8,10)) > (+actual.slice(8,10)) ? 'Monday after' : 'Friday before') + '.</div>' : '')
-    + '<div style="color:var(--text3);margin-top:8px">The pay period view lives in ATLAS. This chip only puts the date on the calendar you already open.</div>';
-  document.getElementById('payDialog').classList.add('open');
-}
-function closePayDialog(){
-  document.getElementById('payDialog').classList.remove('open');
-  payDialogDate = null;
-}
-function openAtlasPayPeriod(){ window.open(atlasPayUrl(), '_blank', 'noopener'); closePayDialog(); }
-
 // ============================================================================
 // STATS — with the calendar filter applied (CAL-3 / #5)
 // ============================================================================
@@ -3935,7 +3882,6 @@ function layerStack() {
   const L = [];
   if (document.getElementById('deleteCalDialog').classList.contains('open')) L.push('deleteCal');
   if (document.getElementById('importOverlay').classList.contains('open'))    L.push('import');
-  if (document.getElementById('payDialog').classList.contains('open'))        L.push('pay');
   if (document.getElementById('detailPopup').classList.contains('open'))      L.push('detail');
   if (document.getElementById('recurDialog').classList.contains('open'))      L.push('recur');
   if (document.getElementById('modalOverlay').classList.contains('open'))     L.push('modal');
@@ -3951,7 +3897,6 @@ function closeTopmostLayer() {
   const top = L[0];                          // the list is built topmost first
   if (top === 'deleteCal')      cancelDeleteCalendar();
   else if (top === 'import')    closeImportDialog();
-  else if (top === 'pay')       closePayDialog();
   else if (top === 'detail')    closeDetail();
   else if (top === 'recur')     closeRecurDialog();
   else if (top === 'modal')     closeModal();
@@ -4002,13 +3947,14 @@ function initBackButton() {
   reconcileActiveCalendars();
   // 2) the generated calendars: current year + next, every load, deduped
   ensureHolidaysForCursor();
-  const payCal = calById('cal_paydays');
-  if (payCal) ensurePaydays(payCal, [currentYear(), currentYear()+1]);
   // 2b) the generated calendars may have just been added, so reconcile again.
   reconcileActiveCalendars();
   // 2c) ONE-TIME DATA REPAIRS (v4.1). Behind a marker so they never re-run and a
   //     later deliberate change by the Commander is not silently undone.
   repairDataOnce();
+  // 2c2) v4.2 — the Paydays calendar is gone for good; clear it out of data
+  //      that was written while it existed. Runs once, behind its own marker.
+  removePaydayCalendarOnce();
   // 2d) the repairs can ADD a calendar (Liberty Schedule). The visibility filter
   //     was reconciled before it existed, which would leave its events hidden —
   //     so reconcile once more, after. (Without this the liberty periods vanish.)
