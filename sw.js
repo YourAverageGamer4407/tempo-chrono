@@ -8,7 +8,7 @@
    - The cache version string is bumped on every release so a stale shell can
      never survive a deploy.
 */
-const CACHE_VERSION = 'chrono-v4-2026-11-12-7';
+const CACHE_VERSION = 'chrono-v4-2026-11-12-8';
 const SHELL = [
   './',
   './index.html',
