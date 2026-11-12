@@ -200,6 +200,8 @@ body {
 .allday-strip { display: flex; flex-direction: column; gap: 2px; }
 .allday-chip { font-family: var(--mono); font-size: 9px; font-weight: 600; border-radius: 3px; padding: 2px 5px; cursor: pointer; background: #7dd8f0; color: #080c10; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .allday-chip:hover { opacity: .85; }
+/* the day-range tag on a multi-day chip */
+.allday-range { font-weight: 400; opacity: .72; margin-left: 3px; }
 .allday-chip.ev-green  { background: #7dddb0; }
 .allday-chip.ev-red    { background: #f28b9a; color: #fff; }
 .allday-chip.ev-yellow { background: #f5d57a; }
@@ -799,7 +801,7 @@ body {
       <div class="form-row-inline">
         <div class="form-row">
           <label>DATE</label>
-          <input type="date" id="evDate" />
+          <input type="date" id="evDate" onchange="syncEndDateHint()" />
         </div>
         <div class="form-row">
           <label>ALL DAY</label>
@@ -809,9 +811,17 @@ body {
           </select>
         </div>
       </div>
+      <!-- MULTI-DAY (SPAN): an inclusive last day. Leave blank for a one-day event.
+           Works for all-day AND timed events; a timed span runs start->midnight on
+           the first day, all day in the middle, midnight->end on the last day. -->
+      <div class="form-row" id="endDateRow">
+        <label>ENDS (optional &mdash; spans multiple days)</label>
+        <input type="date" id="evEndDate" onchange="syncEndDateHint()" oninput="syncEndDateHint()" />
+        <div id="endDateHint" style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.5px;margin-top:5px"></div>
+      </div>
       <div id="timeRow" class="form-row-inline">
-        <div class="form-row"><label>START</label><input type="time" id="evStart" value="09:00" /></div>
-        <div class="form-row"><label>END</label><input type="time" id="evEnd" value="10:00" /></div>
+        <div class="form-row"><label>START</label><input type="time" id="evStart" value="09:00" onchange="syncEndDateHint()" /></div>
+        <div class="form-row"><label>END</label><input type="time" id="evEnd" value="10:00" onchange="syncEndDateHint()" /></div>
       </div>
       <div class="form-row-inline">
         <div class="form-row">
@@ -995,6 +1005,13 @@ function safeUrl(u) {
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function calUid() { return 'cal_' + Math.random().toString(36).slice(2,8); }
 function dateStr(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// "Nov 10" — the short form used on a multi-day chip.
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function shortDate(ds) {
+  if (!ds) return '';
+  const d = parseLocal(ds);
+  return SHORT_MONTHS[d.getMonth()] + ' ' + d.getDate();
+}
 function parseLocal(s) { return new Date(s+'T00:00:00'); }
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
 function addDaysStr(ds, n) { return dateStr(addDays(parseLocal(ds), n)); }
@@ -1223,6 +1240,153 @@ function ensureHolidaysForCursor() {
   const cy = cursor.getFullYear();
   if (wanted.indexOf(cy) === -1) wanted.push(cy);       // whatever year he is viewing
   return ensureHolidays(cal, wanted);
+}
+
+// ============================================================================
+// D. ONE-TIME DATA REPAIRS (v4.1) — idempotent, marked, never touches user data
+//    beyond the specific duplication / span problems described.
+// ============================================================================
+// Holiday names → the rule id the generator uses, so an old migrated holiday can
+// be recognised even though it carries no holidayKey.
+const HOLIDAY_NAME_RULE = {
+  "new year's day": 'new_years',
+  'birthday of martin luther king, jr.': 'mlk',
+  'martin luther king jr. day': 'mlk',
+  "washington's birthday": 'washingtons_birthday',
+  'washington\u2019s birthday': 'washingtons_birthday',
+  'memorial day': 'memorial',
+  'juneteenth national independence day': 'juneteenth',
+  'juneteenth': 'juneteenth',
+  'independence day': 'independence',
+  'labor day': 'labor',
+  'columbus day': 'columbus',
+  'veterans day': 'veterans',
+  "veterans' day": 'veterans',
+  'thanksgiving day': 'thanksgiving',
+  'christmas day': 'christmas'
+};
+function holidayRuleForTitle(t) {
+  return HOLIDAY_NAME_RULE[String(t || '').trim().toLowerCase()] || null;
+}
+// The single real date a holiday actually falls on in a given year, generated
+// from the federal rule (observed date included).
+function federalDateForRule(rule, year) {
+  const hit = usFederalHolidays(year).find(h => h.rule === rule);
+  return hit ? hit.date : null;
+}
+// Collapse duplicate holidays. Root cause this fixes: pre-v4 holiday events were
+// migrated onto the personal calendar with no holidayKey, so they survived next
+// to the generated copies — the Commander saw two Veterans Days.
+// Rule: for each (rule, date) keep exactly ONE event, preferring the generated
+// holiday-calendar copy; a user's own unrelated event is never touched.
+function dedupeHolidays() {
+  const holCal = calById('cal_holidays_us');
+  if (!holCal) return 0;
+  const groups = {};
+  events.forEach(function(ev){
+    if (!ev || !ev.date) return;
+    const rule = ev.holidayRule || holidayRuleForTitle(ev.title);
+    if (!rule) return;
+    const y = parseInt(ev.date.slice(0,4), 10);
+    // Only treat it as this holiday if it sits on (or within 7 days of) the real
+    // federal date — an event merely sharing a holiday's name is left alone.
+    const real = federalDateForRule(rule, y);
+    if (!real) return;
+    const delta = Math.abs((parseLocal(ev.date) - parseLocal(real)) / 864e5);
+    if (delta > 7) return;
+    const key = rule + '|' + real;
+    (groups[key] = groups[key] || []).push(ev);
+  });
+  let removed = 0;
+  Object.keys(groups).forEach(function(key){
+    const list = groups[key];
+    if (list.length < 2) return;
+    // Prefer the generated holiday-calendar event; otherwise the first.
+    let keep = list.find(e => e.calendarId === holCal.id && e.generated) ||
+               list.find(e => e.calendarId === holCal.id) ||
+               list.find(e => e.generated) || list[0];
+    list.forEach(function(ev){
+      if (ev === keep) return;
+      // Never delete something the Commander deliberately edited.
+      if (ev.editedByUser) return;
+      events = events.filter(e => e.id !== ev.id);
+      delete exceptions[ev.id];
+      removed++;
+    });
+  });
+  return removed;
+}
+// Restore the multi-day ranges on liberty/holiday periods that lost them.
+// v2 stored these with an endDate; anything that arrived without one is repaired
+// from the same 2026 schedule the app already encodes.
+function repairLibertySpans() {
+  const COLORS = { 96:'ev-green', 72:'ev-green' };
+  // 2026 special-liberty windows, by the calendar-day range they cover.
+  const windows = [
+    ["New Year's Day",           96, '2025-12-31', '2026-01-05'],
+    ['Martin Luther King Jr. Day', 96, '2026-01-15', '2026-01-20'],
+    ["Washington's Birthday",    96, '2026-02-13', '2026-02-18'],
+    ['Spring Holiday',           72, '2026-04-02', '2026-04-06'],
+    ['Memorial Day',             96, '2026-05-22', '2026-05-27'],
+    ['Juneteenth National Independence Day', 96, '2026-06-17', '2026-06-22'],
+    ['Independence Day',         96, '2026-07-02', '2026-07-07'],
+    ['Labor Day',                96, '2026-09-04', '2026-09-09'],
+    ['Columbus Day',             96, '2026-10-09', '2026-10-14'],
+    ["Veterans' Day",            72, '2026-11-10', '2026-11-12'],
+    ['Thanksgiving Day',         96, '2026-11-25', '2026-11-30'],
+    ['Christmas Day',            96, '2026-12-23', '2026-12-28']
+  ];
+  let fixed = 0;
+  // Find or make the liberty calendar.
+  let cal = calendars.find(c => c.id === 'cal_liberty') ||
+            calendars.find(c => /liberty/i.test(c.name || ''));
+  if (!cal) {
+    cal = { id:'cal_liberty', name:'Liberty Schedule', color:'#7dddb0', colorMode:'calendar',
+            visible:true, order:5, kind:'user', readOnly:false, suppressed:[] };
+    calendars.push(cal);
+  }
+  windows.forEach(function(w){
+    const title = w[0] + ' Liberty';
+    const hours = w[1], begins = w[2], ends = w[3];
+    // Does this period already exist by title+start date, anywhere?
+    let ev = events.find(e => e.date === begins && /liberty/i.test(e.title || '') &&
+                              (e.title === title || e.title === w[0] + " Liberty" || w[0] === e.title));
+    if (ev) {
+      // It exists: make sure it is a span ending on the right day.
+      if (ev.endDate !== ends) { ev.endDate = ends; if (!ev.allDay) ev.allDay = true; fixed++; }
+      if (!ev.calendarId || ev.calendarId === 'cal_default') ev.calendarId = cal.id;
+      return;
+    }
+    events.push({
+      id: 'lib_' + begins.replace(/-/g,''),
+      title: title, date: begins, endDate: ends,
+      allDay: true, start: '00:00', end: '23:59',
+      desc: hours + ' HR SPECIAL LIBERTY \u2014 Begins 1630 ' + begins + ', Ends 0730 ' + ends,
+      color: COLORS[hours] || 'ev-green', recurrence: 'none', recurrenceEnd: '',
+      weeklyDays: [], calendarId: cal.id, link: ''
+    });
+    fixed++;
+  });
+  return fixed;
+}
+
+// Run the one-time repairs, once, and say what actually changed.
+function repairDataOnce() {
+  const MARKER = 'chrono_repairs_v41';
+  if (localStorage.getItem(MARKER)) return;
+  const dupes   = dedupeHolidays();
+  const liberty = repairLibertySpans();
+  // If a Liberty calendar exists and is visible, make sure the visibility filter
+  // actually lists it — reconcileActiveCalendars() only prunes the STORED list, so
+  // a calendar created just now would otherwise stay filtered out (invisible).
+  const libCal = calendars.find(c => /liberty/i.test(c.name || ''));
+  if (libCal && libCal.visible && activeCalendars.indexOf(libCal.id) === -1) {
+    activeCalendars.push(libCal.id);
+    try { localStorage.setItem('chrono_active_calendars', JSON.stringify(activeCalendars)); } catch (e) {}
+  }
+  saveAll();
+  try { localStorage.setItem(MARKER, new Date().toISOString()); } catch (e) {}
+  return { dupes: dupes, liberty: liberty };
 }
 
 // ---- PAYDAY MARKERS (H-4): military pay lands on the 1st and 15th, adjusted
@@ -1533,6 +1697,68 @@ function pushOcc(result, ev, occ, startDs, endDs){
     }
   }
 }
+
+// ============================================================================
+// MULTI-DAY SPANS
+// An event may carry `endDate` (inclusive last day). One event object stays ONE
+// record; it is expanded into one occurrence per day it covers, so every view
+// (week / day / custom / month) shows it on all of its days and the all-day strip
+// can join those days into a single bar.
+//
+// The timed-span rule, first day -> last day:
+//   day 1        : start -> 24:00
+//   middle days  : 00:00 -> 24:00   (full day)
+//   last day     : 00:00 -> end     (only when it is not also the first day)
+// An all-day span is 00:00 -> 24:00 on every day.
+// ============================================================================
+function spanLengthDays(ev) {
+  if (!ev || !ev.endDate || !ev.date) return 1;
+  if (!(ev.endDate > ev.date)) return 1;
+  let n = 1, cur = parseLocal(ev.date), safety = 0;
+  const last = parseLocal(ev.endDate);
+  while (dateStr(cur) < dateStr(last) && safety++ < 3700) { n++; cur = addDays(cur, 1); }
+  return n;
+}
+function isSpan(ev) { return spanLengthDays(ev) > 1; }
+// The time window this event occupies on one specific day of its span.
+function spanWindowFor(ev, ds) {
+  if (ev.allDay) return ['00:00', '24:00'];
+  const first = ds === ev.date;
+  const last  = ds === ev.endDate;
+  if (first && last)  return [ev.start, ev.end];          // degenerate: one day
+  if (first)          return [ev.start, '24:00'];
+  if (last)           return ['00:00', ev.end];
+  return ['00:00', '24:00'];                              // a middle day
+}
+// The window for one day of a span whose FIRST day is baseDs and last is lastDs.
+// (Split out from spanWindowFor so a recurring event's span can be positioned on
+// any occurrence date, not only on ev.date.)
+function spanWindowAt(ev, ds, baseDs, lastDs) {
+  if (ev.allDay) return ['00:00', '24:00'];
+  const first = ds === baseDs, last = ds === lastDs;
+  if (first && last) return [ev.start, ev.end];
+  if (first)         return [ev.start, '24:00'];
+  if (last)          return ['00:00', ev.end];
+  return ['00:00', '24:00'];
+}
+// Emit every day of ONE span (baseDs..lastDs) that falls inside the render window.
+function pushSpanAt(result, ev, baseDs, lastDs, startDs, endDs, exList) {
+  let ds = (startDs > baseDs) ? startDs : baseDs;
+  let safety = 0;
+  while (ds <= lastDs && ds <= endDs && safety++ < 3700) {
+    if (ds >= startDs && exList.indexOf(ds) === -1) {
+      const w = spanWindowAt(ev, ds, baseDs, lastDs);
+      result.push({ ev: ev, occ: ds, cs: w[0], ce: w[1],
+                    span: true, spanBase: baseDs, spanEnd: lastDs,
+                    spanFirst: ds === baseDs, spanLast: ds === lastDs });
+    }
+    ds = addDaysStr(ds, 1);
+  }
+}
+// Emit the single span that a non-recurring event defines.
+function pushSpan(result, ev, startDs, endDs, exList) {
+  pushSpanAt(result, ev, ev.date, ev.endDate, startDs, endDs, exList);
+}
 function expandRange(startDs, endDs) {
   const result = [];
   // Scan one day earlier than the window so an overnight event that began the
@@ -1543,17 +1769,28 @@ function expandRange(startDs, endDs) {
     if (!eventVisible(ev)) return;                     // CAL-3: hidden calendars vanish
     const exList = exceptions[ev.id] || [];
     if (!ev.recurrence || ev.recurrence === 'none') {
+      // A multi-day span covers every day between date and endDate.
+      if (isSpan(ev)) {
+        if (ev.endDate >= startDs && ev.date <= endDs) pushSpan(result, ev, startDs, endDs, exList);
+        return;
+      }
       if (ev.date >= scanStart && ev.date <= endDs && exList.indexOf(ev.date) === -1)
         pushOcc(result, ev, ev.date, startDs, endDs);
       return;
     }
+    // A recurring event may also carry a span length: each occurrence starts a
+    // span of the same number of days.
+    const spanLen = isSpan(ev) ? spanLengthDays(ev) : 1;
+    const spanEndFor = function(baseDs) { return spanLen > 1 ? addDaysStr(baseDs, spanLen - 1) : baseDs; };
     if (ev.recurrence === 'weekly' && ev.weeklyDays && ev.weeklyDays.length) {
       const cap = ev.recurrenceEnd || endDs;
       let cur = parseLocal(scanStart), safety = 0;
       while (dateStr(cur) <= endDs && dateStr(cur) <= cap && safety++ < 1000) {
         const ds = dateStr(cur);
-        if (ds >= ev.date && ev.weeklyDays.indexOf(cur.getDay()) !== -1 && exList.indexOf(ds) === -1)
-          pushOcc(result, ev, ds, startDs, endDs);
+        if (ds >= ev.date && ev.weeklyDays.indexOf(cur.getDay()) !== -1 && exList.indexOf(ds) === -1) {
+          if (spanLen > 1) pushSpanAt(result, ev, ds, spanEndFor(ds), startDs, endDs, exList);
+          else pushOcc(result, ev, ds, startDs, endDs);
+        }
         cur = addDays(cur, 1);
       }
       return;
@@ -1562,7 +1799,10 @@ function expandRange(startDs, endDs) {
     let cur = parseLocal(ev.date), safety = 0;
     while (dateStr(cur) <= endDs && dateStr(cur) <= cap && safety++ < 3650) {
       const ds = dateStr(cur);
-      if (ds >= scanStart && exList.indexOf(ds) === -1) pushOcc(result, ev, ds, startDs, endDs);
+      if (ds >= scanStart && exList.indexOf(ds) === -1) {
+        if (spanLen > 1) pushSpanAt(result, ev, ds, spanEndFor(ds), startDs, endDs, exList);
+        else pushOcc(result, ev, ds, startDs, endDs);
+      }
       cur = nextOcc(cur, ev.recurrence);
     }
   });
@@ -1837,10 +2077,15 @@ function allDayStripHtml(occ, all) {
   let h = '<div class="allday-strip">';
   list.forEach(function(x){
     const c = calForEvent(x.ev);
+    // A span shows its day-range on each of its chips, so a 96-hour liberty reads
+    // as one period rather than as several unrelated one-day entries.
+    const range = x.span
+      ? ' <span class="allday-range">' + shortDate(x.spanBase) + '\u2013' + shortDate(x.spanEnd) + '</span>'
+      : '';
     h += '<div class="allday-chip' + ((c && c.colorMode==='calendar') ? ' calmode' : ' ' + (x.ev.color||'')) + '"'
       + ' style="' + ((c && c.colorMode==='calendar') ? ('background:'+c.color+';color:#080c10;') : '') + 'border-left:3px solid ' + (c?c.color:COLOR_HEX['ev-green']) + '"'
       + ' onclick="showDetail(event,\'' + x.ev.id + '\',\'' + x.occ + '\')">'
-      + esc(x.ev.title) + '</div>';
+      + esc(x.ev.title) + range + '</div>';
   });
   return h + '</div>';
 }
@@ -2240,6 +2485,7 @@ function openNewEvent(ds, start, end){
   document.getElementById('modalTitle').textContent = '// NEW EVENT';
   document.getElementById('evTitle').value = '';
   document.getElementById('evDate').value = ds || dateStr(cursor);
+  document.getElementById('evEndDate').value = '';
   document.getElementById('evAllDay').value = 'no';
   document.getElementById('evStart').value = start || '09:00';
   document.getElementById('evEnd').value = end || '10:00';
@@ -2256,6 +2502,7 @@ function openNewEvent(ds, start, end){
   const defCat = document.querySelector('.cat-btn[data-cat=""]');
   if (defCat) pickCat(defCat);
   fillCalendarPicker(lastNewEventCalendar());
+  syncEndDateHint();
   document.getElementById('modalOverlay').classList.add('open');
   setTimeout(function(){ document.getElementById('evTitle').focus(); }, 50);
 }
@@ -2268,6 +2515,11 @@ function openEditEvent(id, occ){
   document.getElementById('modalTitle').textContent = '// EDIT EVENT';
   document.getElementById('evTitle').value = ev.title;
   document.getElementById('evDate').value = occ || ev.date;
+  // The span end is stored once for the whole record. For a recurring span, show
+  // the end that belongs to THIS occurrence so the form matches what he sees.
+  document.getElementById('evEndDate').value = ev.endDate
+    ? (isSpan(ev) ? addDaysStr(occ || ev.date, spanLengthDays(ev) - 1) : ev.endDate)
+    : '';
   document.getElementById('evAllDay').value = ev.allDay ? 'yes' : 'no';
   document.getElementById('evStart').value = ev.start || '09:00';
   document.getElementById('evEnd').value = ev.end || '10:00';
@@ -2293,11 +2545,28 @@ function openEditEvent(id, occ){
     const c = calById(ev.calendarId);
     if (c && c.readOnly) document.getElementById('calLockNote').textContent = 'THIS IS A GENERATED HOLIDAY — press SAVE once to unlock the calendar, then edit freely';
   }
+  syncEndDateHint();
   document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
 function closeModalOverlay(e){ if (e.target === document.getElementById('modalOverlay')) closeModal(); }
-function toggleTime(){ document.getElementById('timeRow').style.display = document.getElementById('evAllDay').value === 'yes' ? 'none' : ''; }
+function toggleTime(){
+  document.getElementById('timeRow').style.display = document.getElementById('evAllDay').value === 'yes' ? 'none' : '';
+  syncEndDateHint();
+}
+// Say plainly what the span will do, so there is no guessing about the end date.
+function syncEndDateHint(){
+  const el = document.getElementById('endDateHint');
+  if (!el) return;
+  const d  = document.getElementById('evDate').value;
+  const ed = document.getElementById('evEndDate').value;
+  if (!ed || !d || ed <= d) { el.textContent = 'Leave ENDS blank for a single-day event.'; return; }
+  const n = spanLengthDays({ date: d, endDate: ed });
+  const allDay = document.getElementById('evAllDay').value === 'yes';
+  el.textContent = 'SPANS ' + n + ' DAYS  \u00b7  ' + d + ' \u2192 ' + ed
+    + (allDay ? '  \u00b7  all day' : '  \u00b7  ' + document.getElementById('evStart').value
+       + ' \u2192 ' + document.getElementById('evEnd').value);
+}
 function pickCat(el){
   document.querySelectorAll('.cat-btn').forEach(function(b){ b.classList.remove('active'); b.style.borderColor=''; b.style.background=''; });
   el.classList.add('active');
@@ -2308,9 +2577,15 @@ function collectForm(){
   const allDay = document.getElementById('evAllDay').value === 'yes';
   const act = document.querySelector('.cat-btn.active');
   const calEl = document.getElementById('evCalendar');
+  const d  = document.getElementById('evDate').value;
+  // ENDS is only meaningful when it is strictly after DATE; anything else is a
+  // one-day event and the field is cleared so no stale span is stored.
+  const rawEnd = document.getElementById('evEndDate').value;
+  const endDate = (rawEnd && d && rawEnd > d) ? rawEnd : '';
   return {
     title: document.getElementById('evTitle').value.trim(),
-    date: document.getElementById('evDate').value,
+    date: d,
+    endDate: endDate,
     allDay: allDay,
     start: allDay ? '00:00' : document.getElementById('evStart').value,
     end:   allDay ? '23:59' : document.getElementById('evEnd').value,
@@ -2528,6 +2803,8 @@ function shiftEvent(days, mins) {
   const data = {
     title: ev.title,
     date: days !== 0 ? newOcc : ev.date,
+    // A move drags the whole span: both ends shift together, never stretching it.
+    endDate: (ev.endDate && days !== 0) ? shiftDateStr(ev.endDate, days) : (ev.endDate || ''),
     allDay: ev.allDay,
     start: ev.start,
     end: ev.end,
@@ -2611,9 +2888,19 @@ function showDetail(e, id, occ){
   const cal = calForEvent(ev);
   document.getElementById('detailTitle').textContent = ev.title;      // textContent: never innerHTML
   document.getElementById('detailColorBar').style.background = renderedColour(ev);
-  document.getElementById('detailTime').textContent = ev.allDay
-    ? occ + '  \u00b7  ALL DAY'
-    : occ + '  \u00b7  ' + fmtTime(ev.start) + ' \u2014 ' + fmtTime(ev.end);
+  document.getElementById('detailTime').textContent = (function(){
+    // A span states its whole range once, on every day it covers — otherwise the
+    // popup on day 2 of a 96 looked like an unrelated one-day all-day entry.
+    if (isSpan(ev)) {
+      const n = spanLengthDays(ev);
+      const head = (ev.date + ' \u2192 ' + ev.endDate) + '  \u00b7  ' + n + ' DAYS';
+      return ev.allDay ? head + '  \u00b7  ALL DAY'
+                       : head + '  \u00b7  ' + fmtTime(ev.start) + ' \u2014 ' + fmtTime(ev.end);
+    }
+    return ev.allDay
+      ? occ + '  \u00b7  ALL DAY'
+      : occ + '  \u00b7  ' + fmtTime(ev.start) + ' \u2014 ' + fmtTime(ev.end);
+  })();
   document.getElementById('detailRecur').textContent = recurLabel(ev) + (ev.generated ? '  \u00b7  GENERATED' : '');
   document.getElementById('detailCal').innerHTML = ''
     + '<span class="legend-dot" style="background:' + (cal ? cal.color : COLOR_HEX['ev-green']) + '"></span>'
@@ -3462,6 +3749,13 @@ function initBackButton() {
   const payCal = calById('cal_paydays');
   if (payCal) ensurePaydays(payCal, [currentYear(), currentYear()+1]);
   // 2b) the generated calendars may have just been added, so reconcile again.
+  reconcileActiveCalendars();
+  // 2c) ONE-TIME DATA REPAIRS (v4.1). Behind a marker so they never re-run and a
+  //     later deliberate change by the Commander is not silently undone.
+  repairDataOnce();
+  // 2d) the repairs can ADD a calendar (Liberty Schedule). The visibility filter
+  //     was reconciled before it existed, which would leave its events hidden —
+  //     so reconcile once more, after. (Without this the liberty periods vanish.)
   reconcileActiveCalendars();
   saveAll();
   // 3) UI
