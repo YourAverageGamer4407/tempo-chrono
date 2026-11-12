@@ -348,7 +348,9 @@ body {
 .detail-top { padding: 8px 10px; display: flex; justify-content: flex-end; gap: 4px; border-bottom: 1px solid var(--border); }
 .detail-top button { background: none; border: none; cursor: pointer; color: var(--text3); padding: 4px 7px; border-radius: 2px; font-size: 12px; transition: all .12s; }
 .detail-top button:hover { color: var(--accent); background: var(--border); }
-.detail-top button.del:hover { color: var(--danger); }
+/* v4.4: the header holds no destructive action any more, so nothing in it turns red.
+   The ✕ is a close, and it hovers like every other neutral control in the row. */
+.detail-top button.detail-close:hover { color: var(--accent); background: var(--border); }
 .detail-body { padding: 12px 14px 14px; }
 .detail-title { font-size: 14px; font-weight: 500; margin-bottom: 7px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); color: var(--text); overflow-wrap: anywhere; }
 .detail-color-bar { width: 3px; height: 16px; border-radius: 1px; flex-shrink: 0; }
@@ -954,8 +956,12 @@ body {
   <button class="detail-sheet-handle" onclick="closeDetail()" title="Close"><i></i></button>
   <div class="detail-top">
     <button onclick="editFromDetail()" title="Edit">&#9998;</button>
-    <button class="del" onclick="deleteFromDetail()" title="Delete">&#x2715;</button>
-    <button onclick="closeDetail()" title="Close">&#8211;</button>
+    <!-- v4.4 BUG-FIX: the ✕ here used to call deleteFromDetail(), and the actual close
+         was a "–" dash beside it. Everyone reads ✕ as CLOSE, so dismissing the card
+         silently deleted the event. ✕ is now CLOSE, and there is NO destructive
+         control in this row: deleting is only the labeled DELETE EVENT button below,
+         which is recurrence-aware and undoable. -->
+    <button class="detail-close" onclick="closeDetail()" title="Close">&#x2715;</button>
   </div>
   <div class="detail-body">
     <div class="detail-title"><div class="detail-color-bar" id="detailColorBar"></div><span id="detailTitle"></span></div>
