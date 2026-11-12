@@ -1652,116 +1652,31 @@ function saveAll() {
   } catch (err) {}
 })();
 
-/* TEMPO-WEEK-BLOCKS:BEGIN */
-/* TEMPO week blocks — generated 2026-11-12 from the live Todoist list.
-   One-time, marker-guarded. Cleans up the pre-release versions of itself
-   (ids starting "tempo-wk-") that a stale cache may have left behind, then
-   seeds the current block set. Never touches a user-created event. */
-(function tempoWeekBlocks(){
-  var MARKER = 'tempo_week_blocks_2026_11_12';
+/* TEMPO-WEEK-BLOCKS-REMOVED:BEGIN */
+/* TEMPO week blocks WITHDRAWN — 2026-11-12.
+   The Commander asked for every block TEMPO added to CHRONO to be removed,
+   so the original schedule stands and each task can be scheduled one by one.
+   One-time, marker-guarded: it deletes only events whose id starts with
+   "tempo-wk-" and never touches a user-created event, the recurring workout /
+   sleep / money seeds, or a generated holiday. */
+(function tempoWeekBlocksRemoved(){
+  var MARKER = 'tempo_week_blocks_removed_2026_11_12';
   if (localStorage.getItem(MARKER)) return;
   try {
     var before = events.length;
     events = events.filter(function(e){ return !(e && typeof e.id === 'string' && e.id.indexOf('tempo-wk-') === 0); });
     var removed = before - events.length;
-/* CHRONO week blocks — TEMPO, 2026-11-12.
-   Built from the live Todoist list. Real block times only; nothing invented.
-   Emitted into index.html as a one-time seed and also exported as a .json
-   import file so the same blocks can be loaded on any device. */
-function buildWeekBlocks(stamp) {
-  var s = stamp || Date.now().toString(36);
-  var n = 0;
-  function mk(title, date, start, end, color, desc) {
-    n++;
-    return {
-      id: 'tempo-wk-' + s + '-' + n,
-      title: title,
-      date: date,
-      endDate: '',
-      allDay: false,
-      start: start,
-      end: end,
-      desc: desc || '',
-      color: color,
-      recurrence: 'none',
-      recurrenceEnd: '',
-      weeklyDays: [],
-      calendarId: 'cal_default',
-      link: ''
-    };
-  }
-  var D = {
-    thu: '2026-11-12',
-    fri: '2026-11-13',
-    sat: '2026-11-14',
-    sun: '2026-11-15'
-  };
-  return [
-    // ---- THURSDAY Nov 12 (today) ----
-    mk('Commissary run', D.thu, '13:00', '13:45', 'ev-yellow',
-       'Camp food + water before the Friday batch-2 order. From Todoist: Commissary run.'),
-    mk('Restow dried camp gear + note gaps', D.thu, '15:00', '15:30', 'ev-green',
-       'Bag, tarp and cord back in the pack once bone dry. Note anything you ran out of so the Camping batch 2 order covers it.'),
-    mk('Hunter Ed course — start it (modules 1-5)', D.thu, '19:00', '20:30', 'ev-orange',
-       'The online course must exist before Saturday\'s exam. Pick a provider from the NCWRC-approved list (Recademics has a 50% military discount; Hunter-ed.com also works) and get through the first half of the modules tonight. Runs after the evening block.'),
-    mk('Field day — room + common areas', D.thu, '16:30', '17:30', 'ev-pink',
-       'Weekly barracks field day. Room: trash out, surfaces wiped, floor swept/mopped, head cleaned, rack made.'),
-    mk('Evening block', D.thu, '18:00', '18:30', 'ev-pink',
-       'The 10-step evening sequence. Ends with log calories in Lose It! and 15 min of reading.'),
-
-    // ---- FRIDAY Nov 13 ----
-    mk('Payday (Nov 15) — funds land today', D.fri, '00:00', '00:05', 'ev-purple',
-       'All-day marker: the Nov 15 pay hits Fri Nov 13. This is the day the Camping batch 2 and Archery batch 1 orders get placed.'),
-    mk('Budget this paycheck', D.fri, '09:00', '09:20', 'ev-purple',
-       'Log net pay, cover bills due before next payday, move $75 to the emergency fund, load fun + eating-out money, send the rest to the card.'),
-    mk('Renew UPS PO Box + pick up package', D.fri, '08:00', '08:30', 'ev-red',
-       'The one genuinely lapsed deadline — the Nov 10 cutoff passed and it holds an uncollected package. 420 US Hwy 70 W Ste 102, Havelock, open 0800-1800, (252) 733-9111. Bring ID + mailbox key. Ask the term options (3/6/12 months) and price before choosing, then comment the new expiry date on the task.'),
-    mk('Find a tattoo artist whose work matches', D.fri, '15:00', '15:30', 'ev-green',
-       'Shortlist by real healed-work photos, not fresh tattoos.'),
-    mk('Car research batch — exhaust, intake, throttle, ECU', D.fri, '15:30', '17:30', 'ev-yellow',
-       'Four 30-min research blocks back to back, all from Todoist: axle-back exhaust (15:30), cold-air intake (16:00), throttle controller (16:30), ECU tune (17:00). Write the verdict and a price in each task comment so the decision is made, not just researched.'),
-    mk('Errands + payday orders (MCX + Amazon)', D.fri, '19:15', '20:15', 'ev-green',
-       'One trip: book (Letters from a Stoic), meal-prep containers, groceries for turkey pasta prep, stain remover / fabric softener / dryer sheets, socks, contact lenses, charging block, shoe rack, laundry basket, acne-safe products. Then place the online orders: Camping batch 2 (~$245) and Archery batch 1 (~$251). Both are under the $250 cap only if placed separately — check the totals before submitting.'),
-
-    // ---- SATURDAY Nov 14 ----
-    mk('Weigh in + measure waist', D.sat, '05:15', '05:30', 'ev-orange',
-       'On waking, before water or food. Log both in Lose It!.'),
-    mk('Weekly weight check', D.sat, '05:30', '05:40', 'ev-orange',
-       'Average the week, compare to last week, only change calories if two weeks point the same way.'),
-    mk('Saturday Reset', D.sat, '08:00', '08:45', 'ev-pink',
-       'Room reset, start laundry, car oil + tire check, clear bills and inbox, 5-minute money check. Stop when 45 minutes is up.'),
-    mk('Clean out car + tire pressure', D.sat, '08:45', '09:15', 'ev-yellow',
-       'Tires checked cold against the door placard. Car was loaded for camping on Tue — nothing visible on the seats.'),
-    mk('Hunter Ed final exam — pass and save the certificate', D.sat, '09:30', '12:30', 'ev-orange',
-       'Pass mark 80%. Screenshot the certificate and save the number — you need it to buy the State Hunting License on Dec 1. Moved off 10:00: the bow sight-in is now next Saturday because the bow is ordered Friday.'),
-    mk('Garmin Body Battery activity protocol', D.sat, '13:00', '14:00', 'ev-green',
-       'Define what training, chores, recreation and recovery are appropriate at different Body Battery ranges. Keep it simple enough to use daily.'),
-    mk('Pedicure + deep facial', D.sat, '14:00', '16:30', 'ev-pink',
-       'Both are the every-2-months recurring tasks. Booked as one appointment window.'),
-    mk('Midsommar', D.sat, '16:30', '18:30', 'ev-teal',
-       'From the movie list.'),
-    mk('Redline', D.sat, '19:00', '21:00', 'ev-teal',
-       'Start the pillowcase wash when this starts — move it to the dryer about 45 min in so it is back on the pillow before bed.'),
-
-    // ---- SUNDAY Nov 15 ----
-    mk('Sunday hike — Pine Cliff / Neusiok Trail', D.sun, '07:45', '10:45', 'ev-orange',
-       'US-70 Havelock, NC-101 east ~4.7 mi, left on Ferry Rd (NC-306) ~3.2 mi, left on Forest Road 132 to Pine Cliff Picnic Area. Out 60-75 min, turn around. Take 3 photos. This is the single hike slot — the duplicate one-off booking was removed.'),
-    mk('Sunday reset', D.sun, '14:00', '15:30', 'ev-pink',
-       'Laundry including sheets, change bed, wash PT gear and towels, weekly haircut at regulation, nails, razor swap.'),
-    mk('Log credit card balance', D.sun, '20:00', '20:10', 'ev-purple',
-       'The scoreboard. Target: under $4,000 by Oct 2027, zero before EAS.'),
-    mk('Budget check + weekly rep count', D.sun, '20:10', '20:30', 'ev-red',
-       'Close out the payday budget (Nov 15 is a payday). Then write the honest number: how many new conversations this week. Zero two weeks running means the plan is the problem, not you.')
-  ];
-}
-    var blocks = buildWeekBlocks('20261112');
-    events = events.concat(blocks);
+    // any one-off move/delete exception left behind by a removed block
+    Object.keys(exceptions || {}).forEach(function(k){
+      if (k.indexOf('tempo-wk-') === 0) delete exceptions[k];
+    });
     localStorage.setItem(MARKER, new Date().toISOString());
     localStorage.setItem('chrono_v2_events', JSON.stringify(events));
-    console.log('[TEMPO] week blocks seeded: ' + blocks.length + ', stale removed: ' + removed);
-  } catch (err) { console.log("[TEMPO] week block seed failed: " + err); }
+    localStorage.setItem('chrono_v2_exceptions', JSON.stringify(exceptions || {}));
+    console.log('[TEMPO] week blocks removed: ' + removed);
+  } catch (err) { console.log('[TEMPO] week block removal failed: ' + err); }
 })();
-/* TEMPO-WEEK-BLOCKS:END */
+/* TEMPO-WEEK-BLOCKS-REMOVED:END */
 
 // ---- HOUR ZOOM ----
 let HOUR_ZOOM_MODE = localStorage.getItem('chrono_hour_zoom_mode') || '64';
