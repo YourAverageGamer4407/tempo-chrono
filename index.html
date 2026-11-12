@@ -1393,34 +1393,43 @@ function repairLibertySpans() {
   windows.forEach(function(w){
     const title = w[0] + ' Liberty';
     const hours = w[1], begins = w[2], ends = w[3];
-    // Does this period already exist? EXACT title+start-date matching was too
-    // narrow: a liberty the Commander already had under a different wording
-    // ("Veterans' Day 96", "96 Hour Liberty", "Veterans Day Liberty") was not
-    // recognised, so the repair created a SECOND event on the same dates — the
-    // very duplicate this repair exists to prevent. A candidate is now any
-    // existing period whose dates OVERLAP this window and whose title names the
-    // holiday or calls itself a liberty. Its own dates are never rewritten.
-    const holWords = w[0].toLowerCase().replace(/[^a-z ]/g, '')
-                      .split(' ').filter(function(x){ return x.length > 3; });
-    function overlaps(e) {
-      const eEnd = e.endDate && e.endDate > e.date ? e.endDate : e.date;
-      return e.date <= ends && eEnd >= begins;
+    // Does this period already exist?
+    //
+    // HISTORY, and why this matcher is shaped the way it is:
+    //   v1 matched title+start-date EXACTLY. Too narrow — a liberty already
+    //      stored as "Veterans' Day 96" was not recognised, so the repair made a
+    //      SECOND event on the same dates (the duplicate it exists to prevent).
+    //   v2 (rejected, 2026-11-12) then matched ANY untagged event whose title
+    //      merely named the holiday. Too broad — it swallowed the generated
+    //      federal holiday itself ("Veterans Day", one day) and stretched it into
+    //      a 4-day liberty, then consumed that holiday for a later window, so
+    //      only 2 of the 12 windows got events at all. Caught by probing the
+    //      deployed page's storage, not by any assertion.
+    //   v3 (this) is deliberately NARROWER THAN v2 in scope and exact in what it
+    //      accepts: a candidate must be a LIBERTY (title says so), must OVERLAP
+    //      the window, must fall inside the window's dates, and must never be a
+    //      generated holiday, a read-only-calendar event, or one the Commander
+    //      did not create. A generated "Veterans Day" can never match, so it is
+    //      never rewritten and never consumed.
+    function isLibertyTitle(e) {
+      const t = String((e && e.title) || '').toLowerCase();
+      return t.indexOf('liberty') !== -1;
     }
-    function names(e) {
-      const t = String(e.title || '').toLowerCase();
-      if (/liberty/.test(t)) return true;
-      return holWords.some(function(word){ return t.indexOf(word) !== -1; });
+    function inWindow(e) {
+      return e.date >= begins && e.date <= ends;
     }
     let ev = events.find(function(e){
-      return e && e.date && names(e) && overlaps(e) &&
-             // an event already claimed by a different window is not stolen
-             claimed.indexOf(e.id) === -1;
+      if (!e || !e.date || !isLibertyTitle(e) || !inWindow(e)) return false;
+      if (e.generated || e.holidayKey || e.holidayRule) return false;   // never a holiday
+      if (calById(e.calendarId) && calById(e.calendarId).readOnly) return false;
+      if (e.calendarId === 'cal_holidays_us') return false;
+      return claimed.indexOf(e.id) === -1;   // never steal another window's match
     });
     if (ev) {
-      // It exists: make sure it is a span ending on the right day.
-      // A one-day period with no end date gets the window's end; a period that
-      // already has its own real end date keeps it.
-      if (!ev.endDate && ev.date >= begins && ev.date < ends) {
+      // It exists: give it the window's end ONLY if it has none of its own.
+      // A period that already carries its own real end date keeps it — the
+      // repair must never rewrite a range the Commander set.
+      if (!ev.endDate && ev.date < ends) {
         ev.endDate = ends; if (!ev.allDay) ev.allDay = true; fixed++;
       }
       claimed.push(ev.id);
