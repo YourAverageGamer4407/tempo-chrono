@@ -427,6 +427,14 @@ body {
   font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: 1px;
 }
 .move-edit-btn:hover { background: rgba(125,216,240,.18); border-color: var(--accent); }
+.detail-del-btn {
+  width: 100%; margin-top: 10px; padding: 10px 8px; min-height: 40px;
+  background: rgba(242,139,154,.08); border: 1px solid rgba(242,139,154,.35);
+  border-radius: 3px; cursor: pointer; font-family: var(--mono); font-size: 9px;
+  color: var(--danger); letter-spacing: 1px; transition: all .12s;
+}
+.detail-del-btn:hover { background: rgba(242,139,154,.2); border-color: var(--danger); }
+.detail-del-btn:active { background: rgba(242,139,154,.3); }
 
 /* BACKUP ROW in the sidebar */
 .backup-row { display: flex; gap: 6px; margin: 14px 4px 0; }
@@ -971,6 +979,10 @@ body {
       </div>
       <button class="move-edit-btn" onclick="editFromDetail()">MOVE TO EXACT DATE / TIME&#8230;</button>
     </div>
+    <!-- Visible, labeled delete control on the event card (2026-11-12). The ✕ in
+         .detail-top is an unlabeled glyph; this is the readable one. Both call the
+         same recurrence-aware path, and Undo (Ctrl+Z) still reverses it. -->
+    <button class="detail-del-btn" id="detailDeleteBtn" onclick="deleteFromDetail()">DELETE EVENT</button>
   </div>
 </div>
 
