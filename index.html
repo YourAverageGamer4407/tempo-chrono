@@ -1654,21 +1654,35 @@ function saveAll() {
 
 /* TEMPO-WEEK-BLOCKS-REMOVED:BEGIN */
 /* TEMPO week blocks WITHDRAWN — 2026-11-12.
-   The Commander asked for every block TEMPO added to CHRONO to be removed,
-   so the original schedule stands and each task can be scheduled one by one.
-   One-time, marker-guarded: it deletes only events whose id starts with
-   "tempo-wk-" and never touches a user-created event, the recurring workout /
+   The Commander asked for every block TEMPO added to CHRONO to be removed, so
+   the original schedule stands and each task can be scheduled one by one.
+   One-time, marker-guarded. It removes an event if its id starts "tempo-wk-"
+   OR its title+date+start+end is an exact copy of one of the 24 blocks that
+   were seeded (the second test catches a copy whose id was re-minted by an
+   import). It never touches a user-created event, the recurring workout /
    sleep / money seeds, or a generated holiday. */
 (function tempoWeekBlocksRemoved(){
   var MARKER = 'tempo_week_blocks_removed_2026_11_12';
   if (localStorage.getItem(MARKER)) return;
   try {
+    var SIGS = {};
+    ["Commissary run\u00012026-11-12\u000113:00\u000113:45","Restow dried camp gear + note gaps\u00012026-11-12\u000115:00\u000115:30","Hunter Ed course — start it (modules 1-5)\u00012026-11-12\u000119:00\u000120:30","Field day — room + common areas\u00012026-11-12\u000116:30\u000117:30","Evening block\u00012026-11-12\u000118:00\u000118:30","Payday (Nov 15) — funds land today\u00012026-11-13\u000100:00\u000100:05","Budget this paycheck\u00012026-11-13\u000109:00\u000109:20","Renew UPS PO Box + pick up package\u00012026-11-13\u000108:00\u000108:30","Find a tattoo artist whose work matches\u00012026-11-13\u000115:00\u000115:30","Car research batch — exhaust, intake, throttle, ECU\u00012026-11-13\u000115:30\u000117:30","Errands + payday orders (MCX + Amazon)\u00012026-11-13\u000119:15\u000120:15","Weigh in + measure waist\u00012026-11-14\u000105:15\u000105:30","Weekly weight check\u00012026-11-14\u000105:30\u000105:40","Saturday Reset\u00012026-11-14\u000108:00\u000108:45","Clean out car + tire pressure\u00012026-11-14\u000108:45\u000109:15","Hunter Ed final exam — pass and save the certificate\u00012026-11-14\u000109:30\u000112:30","Garmin Body Battery activity protocol\u00012026-11-14\u000113:00\u000114:00","Pedicure + deep facial\u00012026-11-14\u000114:00\u000116:30","Midsommar\u00012026-11-14\u000116:30\u000118:30","Redline\u00012026-11-14\u000119:00\u000121:00","Sunday hike — Pine Cliff / Neusiok Trail\u00012026-11-15\u000107:45\u000110:45","Sunday reset\u00012026-11-15\u000114:00\u000115:30","Log credit card balance\u00012026-11-15\u000120:00\u000120:10","Budget check + weekly rep count\u00012026-11-15\u000120:10\u000120:30"].forEach(function(s){ SIGS[s] = 1; });
+    function sig(e){
+      return String(e && e.title) + '\u0001' + String(e && e.date) + '\u0001'
+        + String(e && e.start) + '\u0001' + String(e && e.end);
+    }
     var before = events.length;
-    events = events.filter(function(e){ return !(e && typeof e.id === 'string' && e.id.indexOf('tempo-wk-') === 0); });
+    var gone = {};
+    events = events.filter(function(e){
+      var byId  = e && typeof e.id === 'string' && e.id.indexOf('tempo-wk-') === 0;
+      var bySig = !!SIGS[sig(e)];
+      if (byId || bySig) { gone[e.id] = 1; return false; }
+      return true;
+    });
     var removed = before - events.length;
     // any one-off move/delete exception left behind by a removed block
     Object.keys(exceptions || {}).forEach(function(k){
-      if (k.indexOf('tempo-wk-') === 0) delete exceptions[k];
+      if (k.indexOf('tempo-wk-') === 0 || gone[k]) delete exceptions[k];
     });
     localStorage.setItem(MARKER, new Date().toISOString());
     localStorage.setItem('chrono_v2_events', JSON.stringify(events));
