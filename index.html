@@ -1692,6 +1692,92 @@ function saveAll() {
 })();
 /* TEMPO-WEEK-BLOCKS-REMOVED:END */
 
+/* TEMPO-FRIDAY-20261113:BEGIN */
+/* Friday 13 Nov 2026 — the Commander's own time hacks, in his words:
+     "no pt in the morning or after work still have the hygiene blocks, im
+      going to have to be at work at 0630"
+     "1630 is when work ends"
+     "The hygiene block in the morning is before work and the afternoon one
+      is right after work then changeover"
+   So: the recurring Friday workout seeds (drive / workout / drive back) and
+   the recurring Friday hygiene seed are suppressed for THIS DATE ONLY, and
+   the day is rebuilt as morning hygiene -> work 0630-1630 -> hygiene +
+   changeover. One-time, marker-guarded, and it never mints a duplicate of a
+   Work block the Commander has already made. */
+(function applyFriday20261113(){
+  var MARKER = 'tempo_friday_2026_11_13_applied';
+  if (localStorage.getItem(MARKER)) return;
+  try {
+    var D = '2026-11-13';
+    function addExc(id){
+      if (!exceptions[id]) exceptions[id] = [];
+      if (exceptions[id].indexOf(D) === -1) exceptions[id].push(D);
+    }
+    // 1. NO PT either end: hide the recurring Friday drive/workout/drive-back
+    //    seeds and the recurring Friday hygiene seed for this date only. Every
+    //    one of them still fires on the Fridays after this one.
+    events.forEach(function(e){
+      if (!e || typeof e.id !== 'string') return;
+      if (e.id.indexOf('seed-w-fri-') === 0) addExc(e.id);
+    });
+    // 2. Work now starts 0630 and ends 1630. If the Commander already has a
+    //    one-off Work block on this date, retime it instead of stacking a
+    //    second one; a recurring Work series gets this occurrence suppressed
+    //    and a one-off Friday copy put in its place.
+    // A Work block can reach this Friday three ways: a one-off dated today, a
+    // weekly series whose base date is in the past, or a daily series. Find
+    // whichever one actually lands on the day.
+    function landsOn(e, ds){
+      if (!e || !e.date || !/^\s*work\b/i.test(String(e.title || ''))) return false;
+      if (e.recurrence === 'weekly') {
+        var days = e.weeklyDays || [];
+        return e.date <= ds && days.indexOf(5) !== -1;
+      }
+      if (e.recurrence === 'daily') return e.date <= ds;
+      return e.date === ds;
+    }
+    var work = null;
+    events.forEach(function(e){
+      if (!work && landsOn(e, D)) work = e;
+    });
+    if (work) {
+      if (!work.recurrence || work.recurrence === 'none') {
+        work.start = '06:30'; work.end = '16:30';
+        work.desc = (work.desc ? work.desc + ' ' : '')
+          + 'Retimed for Friday: on 0630, off 1630 (no PT this day).';
+      } else {
+        addExc(work.id);
+        work = null;
+      }
+    }
+    function mk(id, title, start, end, color, desc){
+      return { id:id, title:title, date:D, endDate:'', allDay:false, start:start,
+        end:end, desc:desc || '', color:color, recurrence:'none', recurrenceEnd:'',
+        weeklyDays:[], calendarId:'cal_default', link:'' };
+    }
+    var made = [];
+    if (!work) made.push(mk('tempo-fri-20261113-work', 'Work', '06:30', '16:30', '',
+      'On at 0630, off at 1630. One-off for this Friday — no PT either end of the day.'));
+    made.push(mk('tempo-fri-20261113-hy-am', 'Hygiene (morning)', '05:30', '06:00', 'ev-pink',
+      'Before the 0630 start. No PT this morning, so this runs straight off waking.'));
+    made.push(mk('tempo-fri-20261113-hy-pm', 'Hygiene + Changeover into Civvies',
+      '16:30', '17:00', 'ev-pink',
+      'Right after work, then changeover. No PT after work today.'));
+    // never stack a duplicate of something already on the day
+    var have = {};
+    events.forEach(function(e){
+      if (e && e.date === D) have[String(e.title || '') + '|' + String(e.start || '')] = 1;
+    });
+    made = made.filter(function(e){ return !have[String(e.title) + '|' + String(e.start)]; });
+    events = events.concat(made);
+    localStorage.setItem(MARKER, new Date().toISOString());
+    localStorage.setItem('chrono_v2_events', JSON.stringify(events));
+    localStorage.setItem('chrono_v2_exceptions', JSON.stringify(exceptions || {}));
+    console.log('[TEMPO] Friday 2026-11-13 applied: ' + made.length + ' block(s) added');
+  } catch (err) { console.log('[TEMPO] Friday 2026-11-13 pass failed: ' + err); }
+})();
+/* TEMPO-FRIDAY-20261113:END */
+
 // ---- HOUR ZOOM ----
 let HOUR_ZOOM_MODE = localStorage.getItem('chrono_hour_zoom_mode') || '64';
 let HOUR_PX = HOUR_ZOOM_MODE === 'auto' ? 64 : (parseInt(HOUR_ZOOM_MODE, 10) || 64);
